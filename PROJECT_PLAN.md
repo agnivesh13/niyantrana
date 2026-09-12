@@ -16,7 +16,7 @@
 | `rag_engine/` | ✅ Merged into `ml/src/recommendation/`, directory removed |
 | `backend2/` | ✅ Layered, 0 npm vulnerabilities, **79 integration tests** green against real Mongo + ML |
 | `frontend/` | ⬜ Out of scope — being replaced wholesale (Days 8-9 skipped; dead Google Fit code and 2.2 MB of duplicate data removed) |
-| Deployment | ✅ Both backend services live on Render + Atlas M0; 2 env vars to correct |
+| Deployment | ✅ Live on Render + Atlas M0; predict, chat and recommend all verified in production |
 
 **Restructure (done alongside Day 1):** both services rebuilt on a layered
 architecture following refactoring.guru principles. See

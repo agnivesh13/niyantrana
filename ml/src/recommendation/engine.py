@@ -106,11 +106,28 @@ class FoodRepository:
 
 
 class AlternativeRetriever:
-    """Finds lower-calorie, lower-fat, protein-comparable alternatives."""
+    """Finds nutritionally better alternatives with a similar main ingredient.
 
-    CALORIE_FACTOR = 0.8   # at least 20% fewer calories
-    FAT_FACTOR = 0.8       # at least 20% less fat
-    PROTEIN_FACTOR = 0.9   # comparable protein
+    Compares macronutrient RATIOS, not absolute grams, because the two sides are
+    measured on different bases: the caller sends a whole portion (a plate of
+    biryani at 650 kcal with 24 g protein) while the database stores per-100 g
+    rows (median 175 kcal, median 4.0 g protein).
+
+    The ported original filtered on absolutes -- `protein_g >= 0.9 * meal
+    protein`. For that 650 kcal meal the floor was 21.6 g, and the highest
+    protein figure anywhere in the 1,014-row database is 21.6 g. The condition
+    was mathematically unsatisfiable, so retrieval returned an empty set for
+    every realistic meal and the prompt fell back to "No direct alternatives
+    found in our database" while still instructing the model not to invent
+    dishes. The feature looked like it worked and was not grounded in anything.
+
+    Ratios (grams per kcal) are unit-invariant, so a per-100 g row and a whole
+    portion are directly comparable.
+    """
+
+    FAT_RATIO_FACTOR = 1.0      # no more fat per calorie than the original
+    PROTEIN_RATIO_FACTOR = 0.9  # at least comparable protein per calorie
+    MIN_MEAL_KCAL = 50          # below this the ratios are noise
 
     def __init__(self, repository: FoodRepository | None = None):
         self._repository = repository or FoodRepository.instance()
@@ -121,6 +138,27 @@ class AlternativeRetriever:
         tokens = [t for t in re.split(r"[^A-Za-z]+", str(meal_name).lower()) if t]
         meaningful = [t for t in tokens if t not in _STOPWORDS and len(t) > 2]
         return (meaningful or tokens or [""])[0]
+
+    @staticmethod
+    def _is_same_dish(candidate: str, meal_name: str) -> bool:
+        """Whether a candidate is effectively the dish the user just ate.
+
+        Per-100 g rows often beat a whole portion on fat-per-calorie, so the
+        database happily recommends "Mutton biryani" to someone who just ate
+        mutton biryani. Technically defensible, useless as advice.
+
+        Compared on word sets so punctuation and word order do not matter --
+        "Mutton biryani/biriyani" matches "Mutton Biryani".
+        """
+        strip = lambda text: {  # noqa: E731
+            word for word in re.split(r"[^a-z]+", str(text).lower())
+            if word and word not in _STOPWORDS and len(word) > 2
+        }
+        query, other = strip(meal_name), strip(candidate)
+        if not query or not other:
+            return False
+        # Every meaningful word of the query appears in the candidate.
+        return query <= other
 
     def retrieve(self, meal_name: str, meal: dict, top_n: int = 3) -> pd.DataFrame:
         frame = self._repository.frame
@@ -133,18 +171,55 @@ class AlternativeRetriever:
             return empty
 
         # re.escape: the meal name is user input, not a pattern.
-        mask = frame["_name_lower"].str.contains(re.escape(ingredient), na=False)
-        for column, key, factor, compare in (
-            ("energy_kcal", "calories", self.CALORIE_FACTOR, "le"),
-            ("fat_g", "fat", self.FAT_FACTOR, "le"),
-            ("protein_g", "protein", self.PROTEIN_FACTOR, "ge"),
-        ):
-            limit = float(meal.get(key) or 0)
-            if limit > 0:
-                bound = limit * factor
-                mask &= (frame[column] <= bound) if compare == "le" else (frame[column] >= bound)
+        by_name = frame[frame["_name_lower"].str.contains(re.escape(ingredient), na=False)]
+        by_name = by_name[~by_name["_name_lower"].map(
+            lambda name: self._is_same_dish(name, meal_name))]
+        if by_name.empty:
+            return empty
 
-        return frame[mask].nsmallest(top_n, "energy_kcal") if mask.any() else empty
+        calories = float(meal.get("calories") or 0)
+        if calories < self.MIN_MEAL_KCAL:
+            # Not enough information to compare ratios; fall back to the
+            # lowest-energy-density options with the same main ingredient.
+            return by_name.nsmallest(top_n, "energy_kcal")
+
+        candidates = by_name[by_name["energy_kcal"] > 0]
+        if candidates.empty:
+            return empty
+
+        mask = pd.Series(True, index=candidates.index)
+
+        fat = float(meal.get("fat") or 0)
+        if fat > 0:
+            meal_fat_ratio = fat / calories
+            mask &= (candidates["fat_g"] / candidates["energy_kcal"]
+                     <= meal_fat_ratio * self.FAT_RATIO_FACTOR)
+
+        protein = float(meal.get("protein") or 0)
+        if protein > 0:
+            meal_protein_ratio = protein / calories
+            mask &= (candidates["protein_g"] / candidates["energy_kcal"]
+                     >= meal_protein_ratio * self.PROTEIN_RATIO_FACTOR)
+
+        matched = candidates[mask]
+        if matched.empty:
+            # Nothing with the same ingredient is better on BOTH ratios. Return
+            # the leanest options by fat-per-calorie rather than an empty set:
+            # a weaker suggestion the model can reason about beats telling it
+            # there is nothing and then forbidding it to invent a dish.
+            #
+            # But it must be LABELLED as a near-miss. Calling these "healthier
+            # alternatives" in the prompt would overstate what was found, and
+            # the model would pass that overstatement on to the user.
+            leanest = candidates.assign(
+                _fat_ratio=candidates["fat_g"] / candidates["energy_kcal"])
+            result = leanest.nsmallest(top_n, "_fat_ratio").drop(columns="_fat_ratio")
+            result.attrs["strictly_better"] = False
+            return result
+
+        result = matched.nsmallest(top_n, "energy_kcal")
+        result.attrs["strictly_better"] = True
+        return result
 
 
 class PromptBuilder:
@@ -160,7 +235,13 @@ class PromptBuilder:
     def build(self, user_context: dict, meal: dict, alternatives: pd.DataFrame) -> str:
         if alternatives.empty:
             options = "No direct alternatives found in our database."
+            heading = "Alternatives from our Database"
         else:
+            # attrs defaults to strict when absent, e.g. the density fallback.
+            strictly_better = alternatives.attrs.get("strictly_better", True)
+            heading = ("Healthier Alternatives from our Database" if strictly_better
+                       else "Similar Dishes from our Database "
+                            "(none were strictly leaner -- say so honestly)")
             options = "".join(
                 f"- {row['food_name']}: {self._nutrient(row['energy_kcal'])} kcal, "
                 f"{self._nutrient(row['fat_g'], 'g')} fat, "
@@ -184,7 +265,7 @@ healthier but similar alternative for their next meal. Use one of the options be
 primary suggestion and briefly explain why it is a better choice. Do not invent new dishes.
 Keep it under 120 words.
 
-**Healthier Alternatives from our Database:**
+**{heading}:**
 {options}
 """
 

@@ -5,7 +5,7 @@ Metabolic risk screening for an Indian user base — fatty liver, dysglycaemia a
 > **Live:** [API](https://niyantrana-api.onrender.com/health) · [inference service](https://niyantrana-inference.onrender.com/health)
 > Both on Render's free tier, so the first request after 15 minutes idle takes ~1 minute to wake.
 >
-> **Status:** backend and ML deployed and tested (167 tests). Frontend being rebuilt — there is no UI yet, so the links above are JSON health checks. See [docs/MANUAL_CHECKLIST.md](docs/MANUAL_CHECKLIST.md).
+> **Status:** backend and ML deployed and tested (185 tests). Frontend being rebuilt — there is no UI yet, so the links above are JSON health checks. See [docs/MANUAL_CHECKLIST.md](docs/MANUAL_CHECKLIST.md).
 >
 > **Not a medical device.** Screening and education only. Every risk score carries this disclaimer in the API response.
 
@@ -140,7 +140,7 @@ Measured: importing TensorFlow costs **358 MB RSS**; onnxruntime costs 33 MB; th
 | Data | NHANES 2013–2018 (CDC, public domain), Anuvaad INDB 2024.11 |
 | API | Node 22, Express 5, Mongoose, Passport (session cookies) |
 | Inference | FastAPI, Pydantic, uvicorn |
-| Tests | pytest (84) + `node:test` (83) — **167 total, zero test-framework dependencies on the Node side** |
+| Tests | pytest (102) + `node:test` (83) — **185 total, zero test-framework dependencies on the Node side** |
 | Deploy | Render × 2 + MongoDB Atlas M0, `render.yaml` blueprint |
 
 ---
@@ -186,7 +186,7 @@ python -m pytest tests/ -q
 ### Tests
 
 ```bash
-cd ml       && python -m pytest tests/ -q     # 84
+cd ml       && python -m pytest tests/ -q     # 102
 cd backend2 && npm test                       # 83 (needs Mongo + inference running)
 ```
 

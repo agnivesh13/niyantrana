@@ -19,73 +19,64 @@ Confirmed working in production: register → login (**cookie issued, so `TRUST_
 
 ---
 
-## Priority 0 — Two production bugs the smoke test found
+## ✅ Priority 0 — both production bugs fixed and verified
 
-Both are already fixed in code. **One `git push` deploys both fixes** — Render
-auto-deploys on commit (`autoDeployTrigger: commit`), and the corrected
-`render.yaml` re-syncs `ML_SERVICE_URL` at the same time.
+You pushed; production picked it up. Verified live:
+
+| Check | Result |
+|---|---|
+| `/api/inference/health` | `reachable: true`, url reported |
+| `/api/predict` | **`provenance: "model"`**, 4 risks, 4 trajectories |
+| `/api/chat` | **`source: gemini`, `grounded: true`** — and the reply quoted the user's own 57/100 score |
+| `/api/recommend` | `source: rag` |
+
+That closes the last Definition-of-done item. `/api/chat` and `/api/recommend`
+had never once succeeded before this point.
+
+---
+
+## Priority 1 — one more push (RAG retrieval was silently ungrounded)
+
+`/api/recommend` worked but returned `alternatives_considered: []` every time,
+so Gemini was improvising while being told "do not invent new dishes".
+
+**Cause: a units mismatch making the filter unsatisfiable.** The caller sends a
+whole portion (650 kcal, 24 g protein); the database stores per-100 g rows
+(median 4.0 g protein, **max 21.6 g**). The floor `protein >= 0.9 x 24 = 21.6 g`
+could not be met by **any** of the 1,014 foods.
+
+Fixed by comparing macronutrient **ratios** (grams per kcal), which are
+unit-invariant. Retrieval now returns real suggestions:
+
+| Meal | Retrieved |
+|---|---|
+| Mutton Biryani | Spinach mutton, Mutton seekh kebab, Kashmiri mutton koftas |
+| Paneer Butter Masala | Paneer soup, Spinach paneer, Paneer shaslik/tikka |
+| Chicken (fried) | Chicken stock, Chicken curry, **Tandoori chicken** |
+
+Two further fixes on top:
+
+- **It used to suggest the dish you just ate.** Per-100 g rows beat a whole
+  portion on fat-per-calorie, so "Mutton Biryani" retrieved "Mutton biryani".
+  Now excluded by word-set comparison.
+- **Near-misses are labelled.** When nothing clears both thresholds the
+  retriever returns the leanest options rather than nothing, but tags them
+  `strictly_better: False` and the prompt heading changes to "Similar Dishes
+  (none were strictly leaner)". Calling a near-miss "healthier" would push an
+  overstatement through the model and on to the user.
+
+18 new tests. **Deploy with one push:**
 
 ```bash
-git add -A && git commit -m "Fix ML_SERVICE_URL and add Gemini model fallback"
+git add -A && git commit -m "Fix RAG retrieval units mismatch"
 git push
 ```
 
-The detail on each follows, in case you would rather patch the dashboard than
-wait for a build.
-
-### ☐ `ML_SERVICE_URL` does not resolve
-
-`/api/predict` currently returns `provenance: "unavailable"` and
-`/api/inference/health` reports `ENOTFOUND` — while the inference service
-answers fine from the public internet.
-
-**Cause:** `render.yaml` wired it with `fromService … property: host`, which
-returns the hostname on Render's **private network**. Private networking between
-web services is not available on the free plan, so the name never resolved.
-
-**Fix now** — Render dashboard → `niyantrana-api` → Environment:
-
-```
-ML_SERVICE_URL = https://niyantrana-inference.onrender.com
-```
-
-`render.yaml` is already corrected, so a redeploy from git also fixes it.
-
-*Silver lining: this accidentally proved the core contract in production. An
-unreachable model produced a 503 with `provenance: "unavailable"` and **no
-invented scores** — exactly what v1 got wrong three different ways.*
-
-### ☐ The Gemini model name was retired
-
-`/api/chat` returns `404: this model models/gemini-2.5-flash is no longer
-available to new users` — months before its published October 2026 date.
-
-**Fix: deploy the current code.** There is no environment variable to set.
-
-`GEMINI_MODEL` is not listed in the Render dashboard because the blueprint
-deliberately does not declare it — setting it *pins* one model and **disables**
-the fallback chain. Leaving it unset is the correct configuration.
-
-Both clients now try `gemini-3.5-flash` → `gemini-3.5-flash-lite` →
-`gemini-2.5-flash`, cache the first that answers, and do *not* walk the chain on
-a 401 or 429 since those are not model-specific. Google shipped three Flash
-generations in a year and pulled one early, so a single hardcoded name is a
-liability. Four tests cover it.
-
-Add `GEMINI_MODEL` by hand in the dashboard only if you later want to force a
-specific model.
-
-### ☐ Then re-verify
+Then confirm `alternatives_considered` is no longer empty:
 
 ```bash
-API=https://niyantrana-api.onrender.com
-curl -s $API/api/inference/health | jq          # reachable: true, and now reports the url
-curl -s -b j -X POST $API/api/predict -H 'Content-Type: application/json' -d '{}' | jq '.provenance, .risks'
-curl -s -b j -X POST $API/api/chat -H 'Content-Type: application/json' -d '{"message":"How is my blood pressure?"}' | jq '.reply'
+curl -s -b j -X POST https://niyantrana-api.onrender.com/api/recommend   -H 'Content-Type: application/json'   -d '{"meal":{"name":"Paneer Butter Masala","calories":480,"fat":36,"protein":14}}'   | jq '.alternatives_considered'
 ```
-
-`/api/predict` should return `provenance: "model"` with four risks. That closes
-the last **Definition of done** item.
 
 ---
 
@@ -164,7 +155,6 @@ Honest list. None of these block a deploy; all belong in the README's limitation
 
 | Gap | Why it's open |
 |---|---|
-| **Chat and recommendation success paths still unverified** | The key is set, but the model name was retired — fix in Priority 0, then they are testable for the first time |
 | **Model is US-calibrated** | Needs NFHS-5 / LASI (above). The most significant scientific limitation |
 | **Self-report vs sensor mismatch unquantified** | NHANES measures sleep/activity by questionnaire; the app uses sensors. NHANES `PAXDAY` accelerometry could quantify it — it's paired within-person |
 | **GGT is unpredictable** (R² −0.001) | Genuinely not learnable from lifestyle features. Reported as a negative result |
@@ -178,9 +168,9 @@ Honest list. None of these block a deploy; all belong in the README's limitation
 
 | | |
 |---|---|
-| Tests | **167** — 84 Python, 83 Node |
+| Tests | **185** — 102 Python, 83 Node |
 | npm vulnerabilities | 0 |
 | Inference image | 627 MB, runs at 145 MiB of a 512 MiB cap |
 | `/predict` latency | 54–66 ms in-container |
 | Fabricated health values in any `src/` tree | **0** |
-| Deployed | ✅ Both backend services live on Render; two env vars to correct (Priority 0) |
+| Deployed | ✅ Live and fully working; one push pending for the RAG fix |
