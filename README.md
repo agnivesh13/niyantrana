@@ -5,7 +5,7 @@ Metabolic risk screening for an Indian user base — fatty liver, dysglycaemia a
 > **Live:** [API](https://niyantrana-api.onrender.com/health) · [inference service](https://niyantrana-inference.onrender.com/health)
 > Both on Render's free tier, so the first request after 15 minutes idle takes ~1 minute to wake.
 >
-> **Status:** backend and ML deployed and tested (185 tests). Frontend being rebuilt — there is no UI yet, so the links above are JSON health checks. See [docs/MANUAL_CHECKLIST.md](docs/MANUAL_CHECKLIST.md).
+> **Status:** backend and ML deployed and tested (185 tests). The web client is built and verified against the deployed API, but not yet hosted — the links above are JSON health checks until it is. See [docs/MANUAL_CHECKLIST.md](docs/MANUAL_CHECKLIST.md).
 >
 > **Not a medical device.** Screening and education only. Every risk score carries this disclaimer in the API response.
 
@@ -238,7 +238,7 @@ So **file import is the primary path**, not a fallback. `POST /api/wearable/impo
 - Recalibrate on **LASI** (~72,000 Indians with HbA1c and BP) for India-appropriate thresholds
 - Add **Withings or Oura** OAuth behind the existing provider seam
 - Quantify the self-report vs sensor gap using NHANES `PAXDAY` accelerometry, which is paired within-person with the questionnaire
-- Rebuild the frontend against the real API
+- Host the web client (Cloudflare Pages) and smoke-test it from a phone on mobile data
 
 ---
 
@@ -248,7 +248,7 @@ So **file import is the primary path**, not a fallback. `POST /api/wearable/impo
 |---|---|
 | [ml/](ml/) | Training, inference, FastAPI service, 84 tests |
 | [backend2/](backend2/) | Node API, 79 integration tests |
-| [frontend/](frontend/) | React PWA — **being rebuilt** |
+| [frontend/](frontend/) | React 18 + Vite + Tailwind client — six screens, no mock data, no secrets in the bundle |
 | [docs/](docs/) | Architecture, refactoring log, data sources, deployment, manual checklist |
 | [ml/RESULTS.md](ml/RESULTS.md) | Every metric, ablation and negative result |
 | [PROJECT_PLAN.md](PROJECT_PLAN.md) | Day-by-day build log |

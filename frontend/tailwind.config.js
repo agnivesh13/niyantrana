@@ -1,139 +1,68 @@
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    "./src/**/*.{js,jsx,ts,tsx}",
-  ],
+/**
+ * Tailwind mapped onto the CSS custom properties in index.css.
+ *
+ * Colours are declared as `hsl(var(--token) / <alpha-value>)` so opacity
+ * modifiers work and a theme change happens in one place. This is the
+ * shadcn/ui convention, which means a component copied from a registry such as
+ * 21st.dev picks up the theme with no edits.
+ */
+export default {
+  content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
-      container: {
-        center: true,
-        padding: {
-          DEFAULT: '1rem',
-          sm: '1.5rem',
-          lg: '2rem',
-          xl: '2.5rem',
-          '2xl': '3rem',
-        },
-      },
       colors: {
-        // Calmer hospital-inspired palette
-        primary: {
-          50: '#eef5ff',
-          100: '#dae8ff',
-          200: '#b8d3ff',
-          300: '#8eb7ff',
-          400: '#5f94ff',
-          500: '#3366ff',
-          600: '#1f4de0',
-          700: '#183db3',
-          800: '#142f8a',
-          900: '#122867',
+        ground: 'hsl(var(--ground) / <alpha-value>)',
+        surface: {
+          DEFAULT: 'hsl(var(--surface) / <alpha-value>)',
+          sunken: 'hsl(var(--surface-sunken) / <alpha-value>)',
         },
-        secondary: {
-          50: '#f0fbfb',
-          100: '#d8f3f2',
-          200: '#b9e6e3',
-          300: '#8fd6d1',
-          400: '#5bbeb7',
-          500: '#34a8a0',
-          600: '#258a84',
-          700: '#1f6e69',
-          800: '#1c5855',
-          900: '#184a47',
+        line: {
+          DEFAULT: 'hsl(var(--border) / <alpha-value>)',
+          strong: 'hsl(var(--border-strong) / <alpha-value>)',
         },
+        primary: 'hsl(var(--text-primary) / <alpha-value>)',
+        secondary: 'hsl(var(--text-secondary) / <alpha-value>)',
+        muted: 'hsl(var(--text-muted) / <alpha-value>)',
         accent: {
-          50: '#f5f7fb',
-          100: '#e9eef7',
-          200: '#d3dbef',
-          300: '#b3c2e4',
-          400: '#7f98d3',
-          500: '#5477c6',
-          600: '#3f5ead',
-          700: '#354e8c',
-          800: '#2d426f',
-          900: '#26375b',
+          DEFAULT: 'hsl(var(--accent) / <alpha-value>)',
+          hover: 'hsl(var(--accent-hover) / <alpha-value>)',
+          soft: 'hsl(var(--accent-soft) / <alpha-value>)',
         },
-        teal: {
-          50: '#f1fbf8',
-          100: '#d9f4eb',
-          200: '#b6e8d8',
-          300: '#87d7c0',
-          400: '#56c1a3',
-          500: '#36a98b',
-          600: '#2a8c74',
-          700: '#247161',
-          800: '#205a50',
-          900: '#1b4a42',
+        // Status ramp: fixed hexes, deliberately outside the series ramp.
+        status: {
+          good: 'var(--status-good)',
+          warning: 'var(--status-warning)',
+          critical: 'var(--status-critical)',
+          'good-soft': 'var(--status-good-soft)',
+          'warning-soft': 'var(--status-warning-soft)',
+          'critical-soft': 'var(--status-critical-soft)',
         },
-        slate: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-        },
-        wellness: {
-          score: {
-            excellent: '#10b981',
-            good: '#f59e0b',
-            warning: '#f97316',
-            critical: '#ef4444',
-          }
-        }
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
-        xl: '0.875rem',
-        '2xl': '1.25rem',
+        sm: 'var(--radius-sm)',
+        DEFAULT: 'var(--radius)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
       },
       boxShadow: {
-        soft: '0 8px 24px rgba(2, 6, 23, 0.06)',
-        card: '0 6px 20px rgba(2, 6, 23, 0.08)',
+        // Material-style elevation: barely-there, mostly carried by the border.
+        card: '0 1px 2px 0 rgb(60 64 67 / 0.06), 0 1px 3px 1px rgb(60 64 67 / 0.04)',
+        raised: '0 1px 3px 0 rgb(60 64 67 / 0.10), 0 4px 8px 3px rgb(60 64 67 / 0.05)',
       },
-      animation: {
-        'fade-in': 'fadeIn 0.5s ease-in-out',
-        'slide-up': 'slideUp 0.3s ease-out',
-        'scale-in': 'scaleIn 0.2s ease-out',
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      fontSize: {
+        // A display step for hero numbers, tight so a big figure stays compact.
+        display: ['3.5rem', { lineHeight: '1', letterSpacing: '-0.03em' }],
+        hero: ['2.75rem', { lineHeight: '1.1', letterSpacing: '-0.025em' }],
       },
+      maxWidth: { content: '68rem' },
       keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        slideUp: {
-          '0%': { transform: 'translateY(10px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
-        scaleIn: {
-          '0%': { transform: 'scale(0.95)', opacity: '0' },
-          '100%': { transform: 'scale(1)', opacity: '1' },
+        'fade-up': {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to: { opacity: '1', transform: 'none' },
         },
       },
-      backdropBlur: {
-        xs: '2px',
-      },
+      animation: { 'fade-up': 'fade-up 0.35s ease-out both' },
     },
   },
-  plugins: [
-    function({ addUtilities }) {
-      const newUtilities = {
-        '.backface-visibility-hidden': {
-          'backface-visibility': 'hidden',
-          '-webkit-backface-visibility': 'hidden',
-        },
-        '.will-change-transform': {
-          'will-change': 'transform',
-        },
-      }
-      addUtilities(newUtilities)
-    },
-  ],
-}
+  plugins: [],
+};

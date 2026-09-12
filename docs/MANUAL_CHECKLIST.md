@@ -126,28 +126,44 @@ git tag -a v2.0.0 -m "v2.0.0"
 
 ---
 
-## Blocked on the frontend rebuild
+## Frontend — built; three items left for you
 
-You descoped the frontend on Day 4 ("we are gonna change entire frontend"). These wait on that.
+The client is rebuilt: landing, sign in, onboarding, dashboard, logging and the
+assistant. It was verified against the **deployed** API, not against fixtures --
+a real assessment was fetched from production and rendered through the real
+dashboard component, so the field names match what the server actually sends.
 
-| Item | Day | Note |
+Done, so these are off your list:
+
+| Item | Day | Evidence |
 |---|---|---|
-| ☐ Deploy frontend to Cloudflare Pages | 12 | `render.yaml` covers only the two backend services |
-| ☐ Verify CORS + cookies across origins on real HTTPS | 12 | Config is tested locally; real cross-site needs both deployed |
-| ☐ Full smoke test **from a phone** | 12 | The definition-of-done item |
-| ☐ Screenshots + 60-second GIF for the README | 14 | Needs a working UI |
-| ☐ Loading / error / empty states | 14 | |
-| ☐ Mobile responsiveness pass | 14 | |
-| ☐ Lighthouse + bundle-size check | 14 | |
+| Loading / error / empty states | 14 | Every screen has all four: skeletons, a not-enough-data refusal, a model-unavailable state with a retry, and empty states that say what is missing |
+| Mobile responsiveness pass | 14 | Checked in a browser at 390px; the nav collapses to icons and the chart drops its label rail and reclaims the width |
+| Bundle-size check | 14 | 24.6 kB gzip entry + 77.7 kB React; the 107.7 kB chart chunk loads only on the dashboard |
+| Render smoke check | — | `npm run smoke` mounts all nine trees through react-dom/server |
 
-**Already done for you, so the rebuild has a foundation:**
+Still yours, because they need accounts or a device:
 
-- `POST /api/wearable/demo` seeds 90 days of deterministic, correlated history — so a reviewer sees a populated app instantly, with every row tagged `source: "demo"`
-- `frontend/src/services/apiService.jsx` is now a real 103-line HTTP client (was a 772-line mock)
-- `AuthContext` uses real session cookies, and the double-wrap bug that blanked the dashboard on every refresh is fixed
-- Every fabricated health value is gone from the frontend
+### ☐ Deploy the client to Cloudflare Pages *(Day 12)* — ~15 minutes
 
----
+Full steps, including the `CORS_ORIGIN` change that is easy to miss, are in
+[DEPLOYMENT.md](DEPLOYMENT.md#4b-deploy-the-web-client-cloudflare-pages).
+
+### ☐ Verify cookies across origins, from a phone *(Day 12)*
+
+The definition-of-done item. After the client is hosted: sign up, complete
+onboarding, load the demo history, and confirm the dashboard shows model-derived
+scores — on mobile data, not wifi. Then **reload the page** and confirm you are
+still signed in; that is the check that catches a cross-site cookie problem.
+
+### ☐ Screenshots and a short GIF for the README *(Day 14)*
+
+Now possible. The dashboard with 90 days of demo history is the one to capture;
+the trajectory chart is the screen that shows this is not a CRUD app.
+
+Also worth running once the client is hosted: **Lighthouse** (Chrome devtools ->
+Lighthouse -> Analyze). Nothing in the build is knowingly failing it, but I have
+not run it against a real deployment.
 
 ## Known gaps I could not close
 
@@ -173,4 +189,6 @@ Honest list. None of these block a deploy; all belong in the README's limitation
 | Inference image | 627 MB, runs at 145 MiB of a 512 MiB cap |
 | `/predict` latency | 54–66 ms in-container |
 | Fabricated health values in any `src/` tree | **0** |
+| npm vulnerabilities (frontend) | 0 |
+| Frontend entry bundle | 24.6 kB gzip; chart chunk lazy-loaded |
 | Deployed | ✅ Live and fully working; one push pending for the RAG fix |

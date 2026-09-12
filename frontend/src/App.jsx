@@ -1,93 +1,105 @@
-import React from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import OnboardingPage from './pages/OnboardingPage.jsx';
+/**
+ * Routes.
+ *
+ * Wiring only: no layout, no state, no fallbacks. The previous App.jsx declared
+ * ten routes, six of them to pages built entirely on mock data (a community
+ * feed, a gamified wellness journey, a reports page that rendered a hardcoded
+ * stranger lab results), and had no 404 and no error element.
+ *
+ * Four screens survive, because four screens is what the backend can honestly
+ * serve: an overview, auth, onboarding, and the dashboard -- plus logging and
+ * the assistant, both of which are real endpoints.
+ */
+import { Navigate, RouterProvider, createBrowserRouter, useRouteError } from 'react-router-dom';
+
+import AppShell from './components/AppShell.jsx';
+import AssistantPage from './pages/AssistantPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import TrendsPage from './pages/TrendsPage.jsx';
-import WellnessJourneyPage from './pages/WellnessJourneyPage.jsx';
-import CommunityPage from './pages/CommunityPage.jsx';
-import ProfilePage from './pages/ProfilePage.jsx';
-import ChatbotPage from './pages/ChatbotPage.jsx';
-import LoggingPage from './pages/LoggingPage.jsx';
-import ReportsPage from './pages/ReportsPage.jsx';
-import Navigation from './components/Navigation.jsx';
-import Header from './components/Header.jsx';
-import ChatLauncher from './components/ChatLauncher.jsx';
-import LoadingSpinner from './components/LoadingSpinner.jsx';
+import LandingPage from './pages/LandingPage.jsx';
+import LogPage from './pages/LogPage.jsx';
+import OnboardingPage from './pages/OnboardingPage.jsx';
+import SignInPage from './pages/SignInPage.jsx';
+import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
+import { ChatProvider } from './contexts/ChatContext.jsx';
+import { Alert, Button, Spinner } from './ui/primitives.jsx';
 
-// (ProtectedRoute not currently used)
-
-// Main App Layout
-const AppLayout = () => {
-  const { user, loading } = useAuth();
-  if (loading) return <LoadingSpinner />;
-  if (!user) return <Navigate to="/login" replace />;
+/** Full-page wait while the session is resolved against the server. */
+function Resolving() {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Header />
-      <Navigation />
-      <main className="pb-20 md:pb-6 pt-2">
-        <Outlet />
-      </main>
-      <ChatLauncher />
+    <div className="grid min-h-screen place-items-center">
+      <Spinner label="Checking your session" />
     </div>
-  );
-};
-
-function App() {
-  const router = createBrowserRouter([
-    { path: '/login', element: <LoginPage /> },
-    { path: '/onboarding', element: <OnboardingPage /> },
-    {
-      path: '/',
-      element: <AppLayout />,
-      children: [
-        { index: true, element: <Navigate to="/dashboard" replace /> },
-        { path: 'dashboard', element: <DashboardPage /> },
-        { path: 'trends', element: <TrendsPage /> },
-        { path: 'wellness-journey', element: <WellnessJourneyPage /> },
-        { path: 'community', element: <CommunityPage /> },
-        { path: 'profile', element: <ProfilePage /> },
-        { path: 'chatbot', element: <ChatbotPage /> },
-        { path: 'logging', element: <LoggingPage /> },
-        { path: 'reports', element: <ReportsPage /> },
-      ],
-    },
-  ], {
-    future: {
-      v7_startTransition: true,
-      v7_relativeSplatPath: true,
-    },
-  });
-
-  return (
-    <AuthProvider>
-      <div className="App">
-        <RouterProvider 
-          router={router}
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true,
-          }}
-        />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '12px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            },
-          }}
-        />
-      </div>
-    </AuthProvider>
   );
 }
 
-export default App;
+/**
+ * Gate on real session state.
+ *
+ * The session cookie is HttpOnly, so the only way to know whether one is valid
+ * is to ask the server -- which is why this waits rather than guessing from
+ * localStorage, as the version it replaces did.
+ */
+function RequireAuth({ children }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <Resolving />;
+  if (!isAuthenticated) return <Navigate to="/signin" replace />;
+  return children;
+}
+
+function RouteError() {
+  const error = useRouteError();
+  return (
+    <div className="mx-auto max-w-xl px-4 py-16">
+      <Alert tone="error" title="Something broke on this page">
+        {error?.message ?? 'An unexpected error occurred.'}
+        <div className="mt-3">
+          <Button size="sm" variant="secondary" onClick={() => window.location.assign('/')}>
+            Back to the start
+          </Button>
+        </div>
+      </Alert>
+    </div>
+  );
+}
+
+function NotFound() {
+  return (
+    <div className="mx-auto max-w-xl px-4 py-16 text-center">
+      <p className="text-hero font-semibold text-primary">404</p>
+      <p className="mt-2 text-secondary">That page does not exist.</p>
+      <div className="mt-6 flex justify-center">
+        <Button onClick={() => window.location.assign('/')}>Back to the start</Button>
+      </div>
+    </div>
+  );
+}
+
+const router = createBrowserRouter([
+  { path: '/', element: <LandingPage />, errorElement: <RouteError /> },
+  { path: '/signin', element: <SignInPage />, errorElement: <RouteError /> },
+  {
+    path: '/onboarding',
+    element: <RequireAuth><OnboardingPage /></RequireAuth>,
+    errorElement: <RouteError />,
+  },
+  {
+    element: <RequireAuth><AppShell /></RequireAuth>,
+    errorElement: <RouteError />,
+    children: [
+      { path: '/dashboard', element: <DashboardPage /> },
+      { path: '/log', element: <LogPage /> },
+      { path: '/assistant', element: <AssistantPage /> },
+    ],
+  },
+  { path: '*', element: <NotFound /> },
+]);
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ChatProvider>
+        <RouterProvider router={router} />
+      </ChatProvider>
+    </AuthProvider>
+  );
+}

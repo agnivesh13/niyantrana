@@ -3,20 +3,24 @@
  *
  * Replaces a browser-side client that read `VITE_GEMINI_API_KEY`. Vite inlines
  * anything VITE_-prefixed into the bundle, so that key was readable by anyone
- * who opened devtools, and spendable against the project's quota. The key now
+ * who opened devtools, and spendable against the project quota. The key now
  * lives only on the server and the browser calls POST /api/chat.
  *
  * The old client also faked token-by-token streaming from seven canned strings
  * whenever the API failed, so a user could not tell a real answer from a stub.
  * A failure is now surfaced as a failure.
  *
- * NOTE: the frontend is being rebuilt. This module exists so the current tree
- * has no path that ships a secret, not as the final design.
+ * The server reports `grounded` on every reply -- whether the answer was built
+ * against the user own stored assessment or answered generally -- and that flag
+ * is carried through to the UI rather than dropped here.
  */
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import apiService from '../services/apiService.jsx';
+
 const STORAGE_KEY = 'niyantrana_chat_history_v2';
+const HISTORY_TURNS = 12;
+const PERSISTED_TURNS = 40;
 
 const ChatContext = createContext(null);
 
@@ -29,8 +33,11 @@ export const useChat = () => {
 function loadHistory() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
+    // A private window, cleared site data, or a quota error. An empty
+    // conversation is the correct fallback; it invents nothing.
     return [];
   }
 }
@@ -42,7 +49,9 @@ export const ChatProvider = ({ children }) => {
 
   const persist = useCallback((next) => {
     setMessages(next);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next.slice(-40))); } catch { /* quota */ }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next.slice(-PERSISTED_TURNS)));
+    } catch { /* quota or blocked storage; the in-memory conversation still works */ }
   }, []);
 
   const send = useCallback(async (text) => {
@@ -55,25 +64,16 @@ export const ChatProvider = ({ children }) => {
     persist(withUser);
 
     try {
-      const response = await fetch(`${API_BASE}/api/chat`, {
-        method: 'POST',
-        credentials: 'include',        // session cookie, not a bearer token
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: trimmed,
-          history: withUser.slice(-12, -1),
-        }),
-      });
-
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        // Surfaced, not papered over with a canned reply.
-        setError(body.message || 'The assistant is unavailable right now.');
-        return;
-      }
-      persist([...withUser, { role: 'model', text: body.reply }]);
+      const body = await apiService.chat.send(trimmed, withUser.slice(-HISTORY_TURNS, -1));
+      persist([...withUser, {
+        role: 'model',
+        text: body.reply,
+        grounded: body.grounded,
+        source: body.source,
+      }]);
     } catch (requestError) {
-      setError(requestError.message || 'Could not reach the assistant.');
+      // Surfaced, not papered over with a canned reply.
+      setError(requestError.message || 'The assistant is unavailable right now.');
     } finally {
       setIsSending(false);
     }

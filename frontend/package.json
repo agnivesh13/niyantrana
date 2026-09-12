@@ -1,61 +1,29 @@
 {
-  "name": "niyantrana",
-  "version": "1.0.0",
+  "name": "niyantrana-web",
+  "version": "2.0.0",
   "description": "Your Personalized Metabolic Wellness Companion",
   "private": true,
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
-    "@testing-library/jest-dom": "^5.16.4",
-    "@testing-library/react": "^13.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "clsx": "^1.2.1",
-    "date-fns": "^2.29.3",
-    "framer-motion": "^10.0.1",
-    "lottie-react": "^2.4.0",
-    "lucide-react": "^0.263.1",
-    "papaparse": "^5.5.3",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-hook-form": "^7.43.9",
-    "react-hot-toast": "^2.4.0",
-    "react-router-dom": "^6.8.1",
-    "react-scripts": "5.0.1",
-    "react-toastify": "^11.0.5",
-    "recharts": "^2.5.0",
-    "tailwind-merge": "^1.13.2",
-    "web-vitals": "^2.1.4",
-    "zustand": "^4.3.8"
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.445.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.3",
+    "recharts": "^2.12.7",
+    "tailwind-merge": "^2.5.2"
   },
   "scripts": {
     "dev": "vite",
-    "start": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "preview": "vite preview --port 4173",
+    "smoke": "vite build --config vite.smoke.config.js --logLevel error && node .smoke/smoke.js"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.7.0",
-    "autoprefixer": "^10.4.14",
-    "postcss": "^8.4.21",
-    "tailwindcss": "^3.2.7",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
     "vite": "^6.3.5"
-  }
+  },
+  "type": "module"
 }

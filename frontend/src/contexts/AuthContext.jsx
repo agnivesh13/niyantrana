@@ -13,9 +13,6 @@
  *    was ever sent to a server, and the scaffolding could not have worked.
  * 3. **Any password accepted.** The mock commented "accept any email/password
  *    combination". Credentials are now verified server-side with bcrypt.
- *
- * NOTE: the frontend is being rebuilt. This exists so the current tree has a
- * working, honest auth path, not as the final design.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 

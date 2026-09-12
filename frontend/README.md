@@ -1,200 +1,75 @@
-# Niyantrana - Your Personalized Metabolic Wellness Companion
+# Niyantrana web client
 
-A sophisticated, responsive, and habit-forming React Progressive Web App (PWA) that serves as a personalized early warning and management system for metabolic diseases, specifically targeting fatty liver, type-2 diabetes, and hypertension for an Indian user base.
-
-## 🌟 Vision
-
-Move beyond simple data tracking and create an intelligent, proactive companion that empowers users to understand their health, make better daily decisions, and build lasting healthy habits through a supportive and engaging experience.
-
-## 🎨 Design Philosophy
-
-The application's design is **Calm, Clear, and Empowering** with:
-- **Modern, clean, and minimalist aesthetic**
-- **Glassmorphism effects** for login and sign-up screens
-- **Soft-focus, abstract natural backgrounds** for serenity and trust
-- **Soft blues, greens, and whites** as base colors
-- **Warm oranges and teals** as accent colors for positive reinforcement
-- **Subtle 2D micro-interactions** and smooth animations
-- **Lottie animations** for onboarding and achievements
-
-## 🚀 Features
-
-### 🔐 Authentication & Onboarding
-- **Glassmorphism UI** with beautiful natural backgrounds
-- **Multi-step conversational onboarding** (one question per screen)
-- **Foundational data collection**: Name, Age, Sex, Height, Weight, Family History, Smoking/Alcohol status
-- **Educational explanations** for why each data point matters
-- **Permissions priming** for Health Connect/HealthKit integration
-
-### 📊 Main Dashboard
-- **Unified Metabolic Score**: Dynamic circular progress bar (0-100) with color-coded feedback
-- **Today's Focus Card**: AI-powered actionable insight for the day
-- **Daily Progress Rings**: Visual progress for Calories, Steps, and Sleep
-- **Quick-Log FAB**: Floating action button for meal, activity, and vital logging
-- **Recent Achievements**: Gamification elements with points and streaks
-
-### 🤖 AI Chatbot Companion
-- **Persistent chat icon** in bottom corner
-- **Full-screen conversational interface**
-- **Natural language logging** for meals, vitals, and activities
-- **Personalized Q&A** referencing user health data
-- **Proactive coaching** with motivational messages
-- **Nutritionist & Recipe Helper** with Indian food database
-
-### 📝 Smart Logging Features
-- **Meal Logging**: Search with auto-complete, recent/frequent tabs, photo recognition
-- **Vitals Logging**: Blood pressure, glucose with immediate visual feedback
-- **Activity Tracking**: Steps, exercise, sleep patterns
-
-### 📈 Trends & Insights
-- **Correlated Insights**: Explicit connections between data points
-- **Long-term Risk Trajectory**: Metabolic score over time
-- **Detailed drill-down charts** for all key metrics
-- **Animated chart presentations**
-
-### 🏆 Gamification & Engagement
-- **Points & Levels System**: Wellness Novice → Explorer → Champion → Master
-- **Achievements Gallery**: Earned badges with unlock previews
-- **Streak Tracking**: Daily logging and activity streaks
-- **Personalized Quests**: Weekly challenges and goals
-
-### 👥 Community & Education
-- **Anonymous Support Circles**: Topic-based forums
-- **Educational Content Hub**: Expert-vetted articles and learning paths
-- **Doctor's Visit Report Generator**: Clean, shareable PDF summaries
-
-### ⚙️ Profile & Settings
-- **Personal details management**
-- **Connected devices management**
-- **Goal customization**
-- **Notification preferences**
-- **Theme selection**
-
-## 🛠️ Technology Stack
-
-- **Frontend**: React 18 with Hooks
-- **Styling**: Tailwind CSS with custom design system
-- **Animations**: Framer Motion for smooth interactions
-- **Charts**: Recharts for data visualization
-- **State Management**: Zustand for global state
-- **Forms**: React Hook Form for form handling
-- **Icons**: Lucide React for consistent iconography
-- **PWA**: Service Worker support and offline capabilities
-- **Routing**: React Router DOM for navigation
-
-## 📱 PWA Features
-
-- **Installable** on mobile and desktop
-- **Offline support** with service worker
-- **App-like experience** with standalone display
-- **Responsive design** for all screen sizes
-- **Fast loading** with optimized assets
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 16+ 
-- npm or yarn
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd niyantrana
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server**
-   ```bash
-   npm start
-   ```
-
-4. **Open your browser**
-   Navigate to `http://localhost:3000`
-
-### 🎯 Standalone Application
-
-This application runs entirely in the browser using localStorage for data persistence. **No backend server, database, or API keys are required!** All features including:
-- User authentication and profiles
-- Health data logging and tracking
-- AI chat responses
-- Community features
-- Gamification system
-
-are implemented with mock data and local storage, making it perfect for development, testing, and demonstration purposes.
-
-### Build for Production
+React 18 + Vite + Tailwind. Six screens, no mock data, no secrets in the bundle.
 
 ```bash
-npm run build
+npm install
+npm run dev      # http://localhost:5173, proxying /api and /auth to :8080
+npm run build    # production bundle into dist/
+npm run smoke    # renders every screen through react-dom/server
 ```
 
-### Run Tests
+## Screens
 
-```bash
-npm test
+| Route | What it does |
+|---|---|
+| `/` | Overview. Headline metrics, what the model is built on, and the limitations, stated on the page rather than buried |
+| `/signin` | Sign in and sign up against Passport **session cookies** |
+| `/onboarding` | Profile, then wearable history (device export or seeded demo) |
+| `/dashboard` | Four risk cards, the trajectory chart, estimated biomarkers, and what the assessment was computed from |
+| `/log` | Meal logging against the Indian food database, and measured vitals |
+| `/assistant` | Server-proxied Gemini chat, with grounding shown per reply |
+
+## What this client will not do
+
+These are structural, not conventions:
+
+- **It never invents a health number.** There is no client-side scoring, no
+  placeholder score, and no fallback value. When `/api/predict` fails, the
+  dashboard shows why — a refusal for too little data, an unavailable state for
+  a sleeping model service — and shows no score at all. The version this
+  replaces rendered `Math.floor(Math.random() * 100)` as an AI risk assessment.
+- **It never asserts nutrition figures.** Meal logging sends a food code and a
+  serving count; the server resolves the macros. A browser cannot claim an
+  intake the model would then believe.
+- **It holds no secrets.** Anything `VITE_`-prefixed is inlined into the bundle,
+  so the only such variable is `VITE_API_BASE_URL`. The Gemini key stays on the
+  server behind `POST /api/chat`.
+- **It shows provenance.** Every score displays where it came from and what it
+  was computed from, because the API makes both required fields.
+
+## Configuration
+
+One variable, in `.env`:
+
+```
+VITE_API_BASE_URL=https://niyantrana-api.onrender.com
 ```
 
-## 🎯 Key Components
+Leave it unset in development: the client then calls its own origin and the Vite
+proxy forwards to `127.0.0.1:8080`, so the browser and API are same-origin and
+the session cookie needs no cross-site handling. In production the two are on
+different hosts and the API answers with `SameSite=None; Secure`.
 
-- **`App.js`**: Main application with routing and authentication
-- **`AuthContext.js`**: User authentication and state management
-- **`DashboardPage.js`**: Central hub with metabolic score and daily focus
-- **`OnboardingPage.js`**: Multi-step user onboarding flow
-- **`LoginPage.js`**: Beautiful glassmorphism authentication
-- **`Navigation.js`**: Bottom navigation with floating action buttons
+## Design system
 
-## 🎨 Customization
+Tokens live in [`src/index.css`](src/index.css) as CSS custom properties and are
+mapped into Tailwind in [`tailwind.config.js`](tailwind.config.js) — the
+shadcn/ui convention, so a component copied from a registry such as
+[21st.dev](https://21st.dev) themes itself with no edits. Primitives are in
+[`src/ui/primitives.jsx`](src/ui/primitives.jsx).
 
-### Colors
-The app uses a custom Tailwind color palette:
-- **Primary**: Soft blues (`primary-50` to `primary-900`)
-- **Secondary**: Gentle greens (`secondary-50` to `secondary-900`)
-- **Accent**: Warm oranges (`accent-50` to `accent-900`)
-- **Teal**: Complementary teals (`teal-50` to `teal-900`)
-- **Wellness Scores**: Contextual colors for health metrics
+The four chart series are the first four slots of a validated categorical
+palette, checked with a data-viz validator against the white card surface rather
+than chosen by eye. Two of the four fall below 3:1 contrast against white, which
+is why the trajectory chart ships a legend, direct labels on every line, and a
+table view: below 3:1, colour is a hint and the label is the identity. The risk
+band ramp is separate from the series ramp so a band can never impersonate a
+series, and every band pairs its colour with an icon and the word.
 
-### Components
-Reusable component classes:
-- **`.glassmorphism`**: Frosted glass effect
-- **`.btn-primary`**: Primary button with hover effects
-- **`.btn-secondary`**: Secondary button with backdrop blur
-- **`.card-hover`**: Hover animations for cards
+## Layout checks
 
-## 🔮 Future Enhancements
-
-- **Enhanced AI responses** with more sophisticated mock conversations
-- **Health Connect/HealthKit** integration for real device data
-- **Advanced analytics** and trend predictions
-- **Expanded community features** and challenges
-- **Wearable device** integration
-- **Export/import** functionality for health data
-- **Offline-first** PWA capabilities with better caching
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Design Inspiration**: Modern wellness apps and medical interfaces
-- **Icons**: Lucide React for beautiful, consistent iconography
-- **Animations**: Framer Motion for delightful micro-interactions
-- **Community**: Open source contributors and health tech enthusiasts
-
----
-
-**Built with ❤️ for better metabolic health and wellness**
+`npm run smoke` mounts every screen but cannot verify the chart: Recharts
+measures its container on mount, so server-rendered markup contains an empty
+SVG. The chart and the phone layout were checked in a real browser at 1280px
+and 390px, against a response captured from the deployed API.

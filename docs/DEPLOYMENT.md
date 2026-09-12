@@ -123,6 +123,48 @@ waking the inference service. That is the cold-start retry working, not a hang.
 
 ---
 
+## 4b. Deploy the web client (Cloudflare Pages)
+
+`render.yaml` covers only the two backend services. The client is a static
+bundle, so it belongs on a CDN that does not sleep -- which also means the
+landing page stays instant while the API is waking.
+
+Connect the repository at `dash.cloudflare.com` -> Workers & Pages -> Create ->
+Pages, and set:
+
+| Setting | Value |
+|---|---|
+| Framework preset | None (Vite) |
+| Build command | `npm install && npm run build` |
+| Build output directory | `dist` |
+| Root directory | `niyantrana/frontend` |
+| Environment variable | `VITE_API_BASE_URL` = `https://niyantrana-api.onrender.com` |
+
+Then, and this is the step that is easy to miss: set `CORS_ORIGIN` on
+`niyantrana-api` to the exact Pages origin (`https://<project>.pages.dev`, no
+trailing slash) and redeploy the API. Until that matches, every request from the
+browser fails CORS while curl keeps working -- which reads like a frontend bug
+and is not one.
+
+Two things to verify in a browser, because neither shows up in curl:
+
+1. **Sign in, then reload the page.** If you are signed out, the cross-site
+   cookie is not sticking: check `TRUST_PROXY` on the API and that the client is
+   on `https`, since `SameSite=None` requires `Secure`.
+2. **Open devtools -> Sources and search the bundle for `AIza`.** It must not
+   appear. Only `VITE_API_BASE_URL` is inlined; the Gemini key lives on the
+   server behind `POST /api/chat`.
+
+A local build behaves the same way as the deployed one:
+
+```bash
+cd niyantrana/frontend
+VITE_API_BASE_URL=https://niyantrana-api.onrender.com npm run build
+npm run preview     # http://localhost:4173
+```
+
+---
+
 ## 5. Things that will bite you
 
 **Login succeeds but the user is immediately logged out.**

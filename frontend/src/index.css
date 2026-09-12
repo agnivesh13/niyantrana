@@ -1,147 +1,116 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/**
+ * Design tokens.
+ *
+ * Google-inspired, calm and clinical: white cards on a light grey ground, one
+ * blue accent, generous whitespace, and colour reserved almost entirely for
+ * risk bands so they read instantly.
+ *
+ * Declared as CSS custom properties in shadcn/ui style, so a component copied
+ * from a registry such as 21st.dev themes itself correctly with no edits.
+ *
+ * The chart colours are NOT chosen by eye. The four trajectory series are the
+ * first four slots of a validated categorical palette, checked with the data-viz
+ * validator against this file's own card surface (#ffffff):
+ *
+ *   lightness band  PASS   chroma floor PASS
+ *   CVD separation  PASS   worst adjacent pair dE 9.1 (protan)
+ *   normal vision   PASS   worst adjacent pair dE 22.9
+ *   contrast        WARN   aqua 2.82 and yellow 2.17 sit below 3:1
+ *
+ * That WARN is why the trajectory chart ships direct series labels and a table
+ * view: below 3:1, colour alone cannot carry identity.
+ *
+ * The status ramp is separate from the series ramp on purpose, so a risk band
+ * can never impersonate a data series. Bands always pair colour with an icon
+ * and the word, never colour alone.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  html {
-    font-family: 'Inter', system-ui, sans-serif;
-  }
-  
-  body {
-    @apply bg-white;
-    @apply text-slate-800;
-    @apply antialiased;
-  }
-}
+  :root {
+    /* Surfaces — Google's classic app grey behind white cards */
+    --ground: 210 20% 98%;        /* #f8f9fa */
+    --surface: 0 0% 100%;         /* #ffffff — the chart surface, as validated */
+    --surface-sunken: 210 17% 96%;
+    --border: 214 15% 91%;        /* #e8eaed */
+    --border-strong: 214 12% 84%;
 
-@layer components {
-  .glassmorphism {
-    @apply bg-white/70 backdrop-blur-md;
-    @apply border border-slate-200/70;
-    @apply shadow-soft;
+    /* Ink */
+    --text-primary: 220 9% 13%;   /* #202124 */
+    --text-secondary: 217 5% 40%; /* #5f6368 */
+    --text-muted: 213 4% 55%;     /* #80868b */
+
+    /* Accent — a single blue, used for actions and nothing else */
+    --accent: 217 89% 51%;        /* #1a73e8 */
+    --accent-hover: 217 84% 44%;
+    --accent-soft: 217 89% 96%;
+    --accent-ring: 217 89% 51%;
+
+    /* Focus */
+    --ring: 217 89% 51%;
+
+    /* Radii — Material 3 leans generous */
+    --radius-sm: 0.5rem;
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
   }
-  
-  .glassmorphism-card {
-    @apply bg-white/70 backdrop-blur-lg;
-    @apply border border-white/20;
-    @apply shadow-card;
-    @apply rounded-xl sm:rounded-2xl;
-    @apply p-4 sm:p-5 md:p-6;
+
+  /* Status ramp — fixed, never themed, never reused as a series colour. */
+  :root {
+    --status-good: #0ca30c;
+    --status-warning: #fab219;
+    --status-critical: #d03b3b;
+    --status-good-soft: #e8f5e9;
+    --status-warning-soft: #fff8e1;
+    --status-critical-soft: #fdecea;
   }
-  
-  .glassmorphism-login {
-    @apply bg-white/50 backdrop-blur-xl;
-    @apply border border-white/30;
-    @apply shadow-xl;
-    @apply rounded-2xl sm:rounded-3xl;
-    @apply transition-all duration-300;
-    @apply hover:shadow-glow hover:bg-white/60;
-    @apply p-5 sm:p-6 md:p-8;
-    @apply will-change-transform;
-    @apply backface-visibility-hidden;
+
+  /* Validated categorical series, slots 1-4 in fixed order. Never cycled. */
+  :root {
+    --series-1: #2a78d6;  /* blue    — fatty liver */
+    --series-2: #eb6834;  /* orange  — blood pressure */
+    --series-3: #1baf7a;  /* aqua    — blood sugar */
+    --series-4: #eda100;  /* yellow  — type-2 diabetes */
+    --grid: #e8eaed;
   }
-  
-  .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700;
-    @apply text-white font-medium;
-    @apply px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-lg sm:rounded-xl;
-    @apply transition-all duration-200;
-    @apply shadow-soft hover:shadow-card;
-    @apply text-sm sm:text-base;
-    @apply w-full sm:w-auto;
+
+  * {
+    border-color: hsl(var(--border));
   }
-  
-  .btn-secondary {
-    @apply bg-white;
-    @apply border border-slate-200;
-    @apply text-slate-700 font-medium;
-    @apply px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-lg sm:rounded-xl;
-    @apply transition-all duration-200;
-    @apply hover:bg-slate-50;
-    @apply text-sm sm:text-base;
-    @apply w-full sm:w-auto;
+
+  html {
+    -webkit-text-size-adjust: 100%;
   }
-  
-  .progress-ring {
-    @apply transform transition-all duration-300;
-    @apply hover:scale-105;
-    @apply will-change-transform;
-    @apply backface-visibility-hidden;
+
+  body {
+    @apply bg-ground text-primary antialiased;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
   }
-  
-  .card-hover {
-    @apply transition-all duration-200;
-    @apply hover:shadow-xl hover:-translate-y-1;
-    @apply transform;
-    @apply will-change-transform;
-    @apply backface-visibility-hidden;
+
+  /* One consistent focus treatment, keyboard only. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
-  
-  .fade-in {
-    @apply animate-fade-in;
-  }
-  
-  .slide-up {
-    @apply animate-slide-up;
-  }
-  
-  .scale-in {
-    @apply animate-scale-in;
+
+  /* Respect a reduced-motion preference rather than animating regardless. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @layer utilities {
-  .text-gradient {
-    @apply bg-gradient-to-r from-primary-700 to-secondary-600;
-    @apply bg-clip-text text-transparent;
-  }
-  
-  .shadow-soft {
-    box-shadow: 0 12px 32px rgba(2, 6, 23, 0.06);
-  }
-  
-  .shadow-glow {
-    box-shadow: 0 0 24px rgba(51, 102, 255, 0.25);
-  }
-  
-  /* Responsive utilities */
-  .responsive-container {
-    @apply w-full px-4 mx-auto;
-    @apply sm:max-w-screen-sm sm:px-6;
-    @apply md:max-w-screen-md;
-    @apply lg:max-w-screen-lg lg:px-8;
-    @apply xl:max-w-screen-xl;
-  }
-  
-  .responsive-padding {
-    @apply px-4 py-4;
-    @apply sm:px-6 sm:py-6;
-    @apply md:px-8 md:py-8;
-    @apply lg:px-10 lg:py-10;
-  }
-  
-  .responsive-grid {
-    @apply grid grid-cols-1 gap-4;
-    @apply sm:grid-cols-2;
-    @apply lg:grid-cols-3;
-    @apply xl:grid-cols-4;
-  }
-  
-  .responsive-flex {
-    @apply flex flex-col;
-    @apply sm:flex-row;
-  }
-  
-  .responsive-text {
-    @apply text-base;
-    @apply sm:text-lg;
-    @apply lg:text-xl;
-  }
-  
-  .responsive-heading {
-    @apply text-xl font-bold;
-    @apply sm:text-2xl;
-    @apply lg:text-3xl;
+  /* Numbers in tabular figures so a changing score does not shift layout. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }

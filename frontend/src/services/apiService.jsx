@@ -15,12 +15,21 @@
  * sessions, so every request sends `credentials: 'include'`. The old file kept
  * `authToken` / `refreshToken` in localStorage, which was the wrong shape for
  * the backend that actually exists.
- *
- * NOTE: the frontend is being rebuilt. This module exists so the current tree
- * contains no fabricated health data, not as the final design.
  */
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080')
-  .replace(/\/+$/, '');
+
+/**
+ * Empty by default, which means same-origin.
+ *
+ * In development that routes through the Vite proxy, so the browser and the API
+ * share an origin and the session cookie needs no cross-site handling at all.
+ * In production the two are on different hosts, so VITE_API_BASE_URL is set and
+ * the API answers with `SameSite=None; Secure`.
+ *
+ * Only ever a URL. No secret is readable here: anything VITE_-prefixed is
+ * inlined into the bundle, which is exactly how the old build leaked its Gemini
+ * key to every visitor.
+ */
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
 export class ApiError extends Error {
   constructor(message, status, details) {
@@ -41,7 +50,8 @@ async function request(path, { method = 'GET', body } = {}) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (networkError) {
-    throw new ApiError(`Cannot reach the API at ${API_BASE}`, 0, networkError.message);
+    throw new ApiError(
+      `Cannot reach the API at ${API_BASE || window.location.origin}`, 0, networkError.message);
   }
 
   const payload = await response.json().catch(() => null);

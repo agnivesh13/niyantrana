@@ -1,404 +1,346 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { TrendingUp, Activity, Moon, Target, Award, Zap, Plus, Utensils, Heart, Droplet } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext.jsx';
-import { useNavigate } from 'react-router-dom';
+/**
+ * The dashboard.
+ *
+ * Four things are true of every number on this screen, and they are the point
+ * of the whole project:
+ *
+ * 1. It came from the API. Nothing is computed or filled in here.
+ * 2. It arrives with a provenance and a basis, both displayed.
+ * 3. If the model cannot be reached, this screen says so. The version this
+ *    replaces rendered `Math.floor(Math.random() * 100)` as an AI risk
+ *    assessment, and the API it called returned `150 + Math.random() * 50`
+ *    with HTTP 200 on any failure.
+ * 4. A refusal is shown as a refusal. Too little wearable history produces an
+ *    actionable empty state, not a score computed from invented days.
+ */
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, CalendarClock, RefreshCw, Utensils } from 'lucide-react';
 
-const DashboardPage = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [currentTime, setCurrentTime] = useState(new Date());
+import apiService, { ApiError } from '../services/apiService.jsx';
+import { CONDITION_LABEL, CONDITION_ORDER, formatScore } from '../lib/utils.js';
+import {
+  Alert, BandPill, Button, Card, CardBody, CardDescription, CardHeader, CardTitle,
+  Disclaimer, EmptyState, ProvenanceTag, Skeleton,
+} from '../ui/primitives.jsx';
+import RiskCard from '../components/RiskCard.jsx';
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
+/**
+ * The chart is the only thing that needs the charting library, and it is the
+ * heaviest dependency in the project. Loading it on demand keeps it out of the
+ * bundle the landing and sign-in screens download.
+ */
+const TrajectoryChart = lazy(() => import('../components/TrajectoryChart.jsx'));
 
-  const getFattyLiverIndexColor = (score) => {
-    if (score >= 80) return 'text-wellness-score-excellent';
-    if (score >= 60) return 'text-wellness-score-good';
-    if (score >= 40) return 'text-wellness-score-warning';
-    return 'text-wellness-score-critical';
-  };
+/** Biomarkers, with the units the API reports them in. */
+const BIOMARKERS = [
+  { key: 'fli', label: 'Fatty Liver Index', unit: '', digits: 1 },
+  { key: 'triglycerides', label: 'Triglycerides', unit: 'mg/dL', digits: 0 },
+  { key: 'ggt', label: 'GGT', unit: 'U/L', digits: 0 },
+  { key: 'hba1c', label: 'HbA1c', unit: '%', digits: 1 },
+  { key: 'systolic_bp', label: 'Systolic BP', unit: 'mmHg', digits: 0 },
+  { key: 'diastolic_bp', label: 'Diastolic BP', unit: 'mmHg', digits: 0 },
+];
 
-  const getFattyLiverIndexBg = (score) => {
-    if (score >= 80) return 'from-wellness-score-excellent to-green-400';
-    if (score >= 60) return 'from-wellness-score-good to-yellow-400';
-    if (score >= 40) return 'from-wellness-score-warning to-orange-400';
-    return 'from-wellness-score-critical to-red-400';
-  };
+function LoadingState() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-8 w-64" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((index) => <Skeleton key={index} className="h-56" />)}
+      </div>
+      <Skeleton className="h-80" />
+    </div>
+  );
+}
 
-  const getGreeting = () => {
-    const hour = currentTime.getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+/**
+ * The server refused, and said why in `details`.
+ *
+ * Rendered as a task rather than an error, because that is what it is: the user
+ * needs 14 days of wearable data or a complete profile, and both are one click
+ * away.
+ */
+function NotReadyState({ error, onRetry }) {
+  const details = error.details ?? {};
+  const needsProfile = Array.isArray(details.missing) && details.missing.length > 0;
 
-  const dailyMetrics = [
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Not enough data yet</CardTitle>
+        <CardDescription>{error.message}</CardDescription>
+      </CardHeader>
+      <CardBody className="space-y-4">
+        {needsProfile ? (
+          <>
+            <p className="text-sm text-secondary">
+              Missing from your profile: {details.missing.join(', ')}.
+            </p>
+            <Link to="/onboarding">
+              <Button>Complete my profile</Button>
+            </Link>
+          </>
+        ) : (
+          <>
+            {typeof details.available === 'number' && (
+              <p className="text-sm text-secondary">
+                {details.available} of {details.required} days recorded.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <Link to="/onboarding">
+                <Button>Add wearable history</Button>
+              </Link>
+              <Button variant="secondary" onClick={onRetry}>
+                <RefreshCw className="size-4" aria-hidden />
+                Try again
+              </Button>
+            </div>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * The model is unreachable.
+ *
+ * This screen exists so that this case has somewhere honest to land. The free
+ * hosting tier sleeps after fifteen minutes, so the first request after an idle
+ * period can legitimately time out -- and the correct response to that is to
+ * say so and offer a retry, never to substitute a number.
+ */
+function UnavailableState({ error, onRetry }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-status-critical" aria-hidden />
+          <div>
+            <CardTitle>The model is not answering</CardTitle>
+            <CardDescription>{error.message}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardBody className="space-y-4">
+        <p className="text-sm leading-relaxed text-secondary">
+          No score is shown because none was produced. The inference service runs on a free
+          tier that sleeps when idle, so a first request after a quiet spell can take up to
+          a minute to wake it.
+        </p>
+        <Button onClick={onRetry}>
+          <RefreshCw className="size-4" aria-hidden />
+          Retry
+        </Button>
+      </CardBody>
+    </Card>
+  );
+}
+
+function BiomarkerPanel({ biomarkers, measuredKeys = [] }) {
+  const present = BIOMARKERS.filter(({ key }) => biomarkers?.[key] !== null
+    && biomarkers?.[key] !== undefined);
+  if (!present.length) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Estimated biomarkers</CardTitle>
+        <CardDescription>
+          Model estimates unless marked measured. A real lab value always overrides an
+          estimate.
+        </CardDescription>
+      </CardHeader>
+      <CardBody>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+          {present.map(({ key, label, unit, digits }) => (
+            <div key={key}>
+              <dt className="text-xs text-secondary">{label}</dt>
+              <dd className="mt-0.5 flex items-baseline gap-1">
+                <span className="text-lg font-semibold text-primary tabular">
+                  {biomarkers[key].toFixed(digits)}
+                </span>
+                {unit && <span className="text-xs text-muted">{unit}</span>}
+              </dd>
+              {measuredKeys.includes(key) && (
+                <p className="text-[11px] text-status-good">measured</p>
+              )}
+            </div>
+          ))}
+        </dl>
+      </CardBody>
+    </Card>
+  );
+}
+
+/** What the assessment was actually computed from. */
+function InputsPanel({ inputs }) {
+  if (!inputs) return null;
+  const rows = [
+    { label: 'Wearable days scored', value: inputs.wearableDays },
+    { label: 'History available', value: `${inputs.historyDays} days` },
+    { label: 'Meals counted', value: inputs.mealsCounted ?? 0 },
     {
-      label: 'Calories',
-      value: 1850,
-      target: 2000,
-      icon: Target,
-      color: 'from-orange-400 to-red-400'
+      label: 'Measured biomarkers used',
+      value: inputs.measuredBiomarkers?.length
+        ? inputs.measuredBiomarkers.map((key) => key.replace(/_/g, ' ')).join(', ')
+        : 'none',
     },
-    {
-      label: 'Steps',
-      value: 8420,
-      target: 10000,
-      icon: Activity,
-      color: 'from-blue-400 to-purple-400'
-    },
-    {
-      label: 'Sleep',
-      value: 7.5,
-      target: 8,
-      icon: Moon,
-      color: 'from-indigo-400 to-blue-400'
-    },
-    {
-      label: 'Water',
-      value: 6,
-      target: 8,
-      icon: Droplet,
-      color: 'from-cyan-400 to-blue-400'
-    }
-  ];
-
-  const todaysFocus = {
-    title: "Focus on Post-Meal Movement",
-    description: "Take a 10-minute walk after your main meals today. This simple habit can improve your blood sugar control by up to 30%.",
-    icon: TrendingUp,
-    color: 'from-green-400 to-teal-400'
-  };
-
-  const recentAchievements = [
-    { title: '7-Day Streak', description: 'Logged meals for 7 consecutive days', points: 50 },
-    { title: 'Step Goal Met', description: 'Achieved daily step goal 5 times this week', points: 75 },
-    { title: 'Healthy Choice', description: 'Made 3 healthy food swaps this week', points: 25 }
   ];
 
   return (
-    <div className="relative min-h-screen bg-slate-50 pb-32 md:pb-10">
-      <div className="relative z-10">
-        <div className="responsive-container">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gradient">
-              {getGreeting()}, {user?.name || 'User'}!
-            </h1>
-            <p className="text-gray-600">
-              {currentTime.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </p>
-          </div>
-          <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-r from-primary-500 to-teal-500 rounded-full flex items-center justify-center text-white font-semibold shadow-soft">
-            {user?.name?.charAt(0) || 'U'}
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Today's Focus Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="glassmorphism-login p-6 mb-6 shadow-glow card-hover border-l-4 border-teal-400 will-change-transform backface-visibility-hidden"
-        whileHover={{ scale: 1.02 }}
-      >
-        <div className="flex items-start space-x-4">
-          <div className={`w-14 h-14 bg-gradient-to-r ${todaysFocus.color} rounded-2xl flex items-center justify-center text-white shadow-lg transform -rotate-3`}>
-            <todaysFocus.icon className="w-7 h-7" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-xl font-semibold text-gradient bg-gradient-to-r from-teal-600 to-green-500 mb-3">
-              Today's Focus
-            </h3>
-            <h4 className="text-lg font-medium text-gray-800 mb-2">
-              {todaysFocus.title}
-            </h4>
-            <p className="text-gray-700 leading-relaxed">
-              {todaysFocus.description}
-            </p>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Google Fit Widget */}
-
-      {/* Quick Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="glassmorphism-login p-6 mb-6 shadow-glow relative overflow-hidden"
-      >
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-green-100 rounded-full mix-blend-multiply filter blur-xl opacity-60"></div>
-        
-        <h3 className="text-xl font-semibold text-gradient bg-gradient-to-r from-green-600 to-teal-500 mb-5 relative z-10">
-          Quick Actions
-        </h3>
-        
-        <div className="grid grid-cols-1 gap-4 relative z-10">
-          <motion.button
-            onClick={() => navigate('/logging')}
-            className="flex items-center justify-between p-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 rounded-xl text-white shadow-lg transition-all duration-300"
-            whileHover={{ scale: 1.02, y: -2 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                <Plus className="w-6 h-6" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold text-lg">Quick Log</div>
-                <div className="text-green-100 text-sm">Log meals, vitals & activities</div>
-              </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>What this was computed from</CardTitle>
+        <CardDescription>
+          Macros come from your own meal logs, resolved server-side against the food
+          database — never asserted by the browser.
+        </CardDescription>
+      </CardHeader>
+      <CardBody>
+        <dl className="space-y-2.5 text-sm">
+          {rows.map((row) => (
+            <div key={row.label} className="flex justify-between gap-4">
+              <dt className="text-secondary">{row.label}</dt>
+              <dd className="text-right font-medium text-primary tabular">{row.value}</dd>
             </div>
-            <div className="flex space-x-2">
-              <Utensils className="w-5 h-5 text-green-200" />
-              <Heart className="w-5 h-5 text-green-200" />
-              <Activity className="w-5 h-5 text-green-200" />
-            </div>
-          </motion.button>
-        </div>
-      </motion.div>
-
-      {/* Combined Fatty Liver Index and Daily Progress */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="glassmorphism-login p-6 mb-6 shadow-glow relative overflow-hidden will-change-transform backface-visibility-hidden"
-        whileHover={{ scale: 1.01 }}
-      >
-        <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary-100 rounded-full mix-blend-multiply filter blur-xl opacity-70"></div>
-        <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-teal-100 rounded-full mix-blend-multiply filter blur-xl opacity-70"></div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
-          {/* Fatty Liver Index - Left Half */}
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gradient bg-gradient-to-r from-primary-600 to-teal-500 mb-6">
-              Your Fatty Liver Index
-            </h2>
-            
-            <div className="relative inline-block mb-6">
-              <svg className="w-44 h-44 transform -rotate-90" viewBox="0 0 36 36">
-                {/* Background circle */}
-                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#e5e7eb" strokeWidth="1.5" opacity="0.3" />
-                
-                {/* Dotted circle */}
-                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#e5e7eb" strokeWidth="0.3" strokeDasharray="0.5,0.5" />
-                
-                {/* Score path */}
-                <path
-                  d="M18 2.0845
-                    a 15.9155 15.9155 0 0 1 0 31.831
-                    a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke="url(#gradient)"
-                  strokeWidth="3"
-                  strokeDasharray={`${(user?.fattyLiverIndex || 75) * 1.4}, 100`}
-                  strokeLinecap="round"
-                  className="drop-shadow-lg"
-                />
-                
-                <defs>
-                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor={getFattyLiverIndexColor(user?.fattyLiverIndex || 75).replace('text-', '')} />
-                    <stop offset="100%" stopColor={getFattyLiverIndexBg(user?.fattyLiverIndex || 75).split(' ')[1]} />
-                  </linearGradient>
-                </defs>
-              </svg>
-              
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center bg-white/30 backdrop-blur-sm w-24 h-24 rounded-full flex flex-col items-center justify-center shadow-inner">
-                  <div className={`text-5xl font-extrabold ${getFattyLiverIndexColor(user?.fattyLiverIndex || 75)}`}>
-                    {user?.fattyLiverIndex || 75}
-                  </div>
-                  <div className="text-xs text-gray-600 font-medium">/ 100</div>
-                </div>
-              </div>
-            </div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white/50 backdrop-blur-sm py-3 px-4 rounded-xl shadow-inner"
-            >
-              <p className="text-gray-700 font-medium">
-                {user?.fattyLiverIndex >= 80 ? 'Excellent! Keep up the great work!' :
-                 user?.fattyLiverIndex >= 60 ? 'Good progress! You\'re on the right track.' :
-                 user?.fattyLiverIndex >= 40 ? 'Room for improvement. Let\'s work on this together.' :
-                 'Let\'s focus on building healthy habits together.'}
-              </p>
-            </motion.div>
-          </div>
-          
-          {/* Daily Progress - Right Half */}
-          <div>
-            <h3 className="text-xl font-semibold text-gradient bg-gradient-to-r from-blue-600 to-purple-500 mb-5">
-              Today's Progress
-            </h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              {dailyMetrics.map((metric, index) => {
-                const Icon = metric.icon;
-                const percentage = Math.min((metric.value / metric.target) * 100, 100);
-                
-                return (
-                  <motion.div 
-                    key={metric.label} 
-                    className="text-center bg-white/40 backdrop-blur-sm p-3 rounded-xl shadow-inner will-change-transform backface-visibility-hidden"
-                    whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.5)' }}
-                    transition={{ type: 'spring', stiffness: 300 }}
-                  >
-                    <div className="relative inline-block mb-2">
-                      <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
-                        {/* Background circle */}
-                        <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#e5e7eb" strokeWidth="1.2" opacity="0.3" />
-                        
-                        {/* Dotted circle */}
-                        <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#e5e7eb" strokeWidth="0.2" strokeDasharray="0.3,0.3" />
-                        
-                        {/* Progress path */}
-                        <path
-                          d="M18 2.0845
-                            a 15.9155 15.9155 0 0 1 0 31.831
-                            a 15.9155 15.9155 0 0 1 0 -31.831"
-                          fill="none"
-                          stroke={`url(#gradient-${index})`}
-                          strokeWidth="2.5"
-                          strokeDasharray={`${percentage * 1.4}, 100`}
-                          strokeLinecap="round"
-                          className="drop-shadow-md"
-                        />
-                        <defs>
-                          <linearGradient id={`gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor={metric.color.split(' ')[0].replace('from-', '')} />
-                            <stop offset="100%" stopColor={metric.color.split(' ')[1].replace('to-', '')} />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                      
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="bg-white/60 backdrop-blur-sm w-10 h-10 rounded-full flex items-center justify-center shadow-inner">
-                          <Icon className="w-5 h-5" style={{ color: metric.color.split(' ')[0].replace('from-', '') }} />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="text-sm font-semibold text-gray-800 mb-1">{metric.label}</div>
-                    <div className="flex items-center justify-center space-x-1">
-                      <span className="text-sm font-bold" style={{ color: metric.color.split(' ')[0].replace('from-', '') }}>
-                        {metric.value}
-                      </span>
-                      <span className="text-xs text-gray-500 font-medium">
-                        / {metric.target}
-                      </span>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Recent Achievements */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="glassmorphism-login p-6 mb-6 shadow-glow relative overflow-hidden"
-        whileHover={{ scale: 1.01 }}
-      >
-        <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-accent-100 rounded-full mix-blend-multiply filter blur-xl opacity-60"></div>
-        
-        <div className="flex items-center justify-between mb-5 relative z-10">
-          <h3 className="text-xl font-semibold text-gradient bg-gradient-to-r from-accent-600 to-yellow-500">
-            Recent Achievements
-          </h3>
-          <div className="w-10 h-10 bg-gradient-to-r from-accent-500 to-yellow-400 rounded-full flex items-center justify-center shadow-md">
-            <Award className="w-5 h-5 text-white" />
-          </div>
-        </div>
-        
-        <div className="space-y-4 relative z-10">
-          {recentAchievements.map((achievement, index) => (
-            <motion.div
-              key={achievement.title}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 + index * 0.1 }}
-              className="flex items-center justify-between p-4 bg-white/50 backdrop-blur-md rounded-xl shadow-md hover:shadow-lg transition-all duration-300 border-l-2 border-accent-400"
-              whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.6)' }}
-            >
-              <div>
-                <div className="font-semibold text-gray-800 text-lg">{achievement.title}</div>
-                <div className="text-gray-600">{achievement.description}</div>
-              </div>
-              <div className="flex items-center space-x-2 bg-accent-50 py-1 px-3 rounded-full shadow-inner">
-                <Zap className="w-5 h-5 text-accent-500" />
-                <span className="text-base font-bold text-accent-600">+{achievement.points}</span>
-              </div>
-            </motion.div>
           ))}
-        </div>
-      </motion.div>
+        </dl>
+        {!inputs.mealsCounted && (
+          <Alert tone="warning" className="mt-4">
+            No meals logged, so diet was left unknown rather than assumed to be zero.
+            Logging a day of meals sharpens every score on this page.
+            <div className="mt-3">
+              <Link to="/log">
+                <Button size="sm" variant="secondary">
+                  <Utensils className="size-4" aria-hidden />
+                  Log a meal
+                </Button>
+              </Link>
+            </div>
+          </Alert>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
 
-      {/* Quick Stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="glassmorphism-login p-6 shadow-glow relative overflow-hidden mb-6"
-        whileHover={{ scale: 1.01 }}
-      >
-        <div className="absolute -top-10 -left-10 w-32 h-32 bg-primary-100 rounded-full mix-blend-multiply filter blur-xl opacity-60"></div>
-        
-        <div className="flex items-center justify-between mb-5 relative z-10">
-          <h3 className="text-xl font-semibold text-gradient bg-gradient-to-r from-primary-600 to-blue-500">
-            Quick Stats
-          </h3>
-          <div className="w-10 h-10 bg-gradient-to-r from-primary-500 to-blue-400 rounded-full flex items-center justify-center shadow-md">
-            <Activity className="w-5 h-5 text-white" />
-          </div>
+export default function DashboardPage() {
+  const [assessment, setAssessment] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const assess = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setAssessment(await apiService.risk.assess());
+    } catch (requestError) {
+      setError(requestError);
+      setAssessment(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { assess(); }, [assess]);
+
+  // Fixed display order, independent of the order the server happens to use.
+  const risks = useMemo(() => {
+    if (!assessment?.risks) return [];
+    return CONDITION_ORDER
+      .map((condition) => assessment.risks.find((risk) => risk.condition === condition))
+      .filter(Boolean);
+  }, [assessment]);
+
+  const headline = useMemo(() => {
+    if (!risks.length) return null;
+    return risks.reduce((worst, risk) => (risk.score > worst.score ? risk : worst));
+  }, [risks]);
+
+  if (loading) return <LoadingState />;
+
+  if (error) {
+    const status = error instanceof ApiError ? error.status : 500;
+    if (status === 400) return <NotReadyState error={error} onRetry={assess} />;
+    if (status === 503 || status === 0) return <UnavailableState error={error} onRetry={assess} />;
+    return (
+      <Alert tone="error" title="Could not load your assessment">
+        {error.message}
+        <div className="mt-3">
+          <Button size="sm" variant="secondary" onClick={assess}>Retry</Button>
         </div>
-        
-        <div className="grid grid-cols-2 gap-6 relative z-10">
-          <motion.div 
-            className="flex flex-col items-center justify-center p-5 bg-white/50 backdrop-blur-md rounded-xl shadow-md border-t-2 border-primary-400"
-            whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.6)' }}
-          >
-            <div className="text-4xl font-bold text-gradient bg-gradient-to-r from-primary-600 to-blue-500">{user?.streak || 0}</div>
-            <div className="text-gray-700 font-medium mt-1">Day Streak</div>
-          </motion.div>
-          
-          <motion.div 
-            className="flex flex-col items-center justify-center p-5 bg-white/50 backdrop-blur-md rounded-xl shadow-md border-t-2 border-accent-400"
-            whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.6)' }}
-          >
-            <div className="text-4xl font-bold text-gradient bg-gradient-to-r from-accent-600 to-yellow-500">{user?.level || 'Novice'}</div>
-            <div className="text-gray-700 font-medium mt-1">Current Level</div>
-          </motion.div>
+      </Alert>
+    );
+  }
+
+  if (!risks.length) {
+    return (
+      <EmptyState
+        icon={CalendarClock}
+        title="No assessment available"
+        action={<Button onClick={assess}>Run an assessment</Button>}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Headline: the condition that needs attention, named and banded. */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-primary">Your metabolic risk</h1>
+          <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-secondary">
+            Highest right now:
+            <span className="font-medium text-primary">
+              {CONDITION_LABEL[headline.condition]} at {formatScore(headline.score)}
+            </span>
+            <BandPill band={headline.band} />
+          </p>
         </div>
-      </motion.div>
+        <div className="flex items-center gap-3">
+          <ProvenanceTag provenance={assessment.provenance} />
+          <Button variant="secondary" size="sm" onClick={assess}>
+            <RefreshCw className="size-4" aria-hidden />
+            Refresh
+          </Button>
         </div>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {risks.map((risk) => <RiskCard key={risk.condition} risk={risk} />)}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Risk trajectory</CardTitle>
+          <CardDescription>
+            How each score has moved as your logged behaviour has changed. This measures the
+            response to observed behaviour, not a forecast of your biology.
+          </CardDescription>
+        </CardHeader>
+        <CardBody>
+          <Suspense fallback={<Skeleton className="h-72" />}>
+            <TrajectoryChart
+              trajectories={assessment.trajectories}
+              historyDays={assessment.inputs?.historyDays}
+            />
+          </Suspense>
+        </CardBody>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BiomarkerPanel
+          biomarkers={assessment.biomarkers}
+          measuredKeys={assessment.inputs?.measuredBiomarkers}
+        />
+        <InputsPanel inputs={assessment.inputs} />
+      </div>
+
+      {/* The disclaimer the API returns, shown verbatim. */}
+      <Disclaimer>{assessment.disclaimer}</Disclaimer>
     </div>
   );
-};
-
-export default DashboardPage;
+}
