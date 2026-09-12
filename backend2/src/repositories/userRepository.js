@@ -103,8 +103,44 @@ export class UserRepository {
     return User.findByIdAndUpdate(id, { $push: { healthHistory: report } }, { new: true });
   }
 
-  saveFitbitTokens(id, tokens) {
-    return User.findByIdAndUpdate(id, { $set: { fitbit: tokens } }, { new: true });
+  findByGoogleId(googleId) {
+    return User.findOne({ googleId: String(googleId) });
+  }
+
+  /** Link a Google account to an existing password account. */
+  linkGoogleId(id, googleId) {
+    return User.findByIdAndUpdate(id, { $set: { googleId: String(googleId) } },
+      { new: true, runValidators: true });
+  }
+
+  /**
+   * Store Google Health tokens.
+   *
+   * Merged field by field rather than replacing the sub-document, so a token
+   * refresh does not wipe `connectedAt` or the granted scope list.
+   */
+  saveGoogleHealthTokens(id, tokens) {
+    const update = Object.fromEntries(
+      Object.entries(tokens).map(([field, value]) => [`googleHealth.${field}`, value]),
+    );
+    return User.findByIdAndUpdate(id, { $set: update }, { new: true });
+  }
+
+  /** Read the tokens back. They are `select: false`, so they must be asked for. */
+  googleHealthTokens(id) {
+    return User.findById(id)
+      .select('+googleHealth +googleHealth.accessToken +googleHealth.refreshToken')
+      .lean();
+  }
+
+  /**
+   * Forget the connection.
+   *
+   * Wearable days already imported are deliberately kept: they are the user's
+   * own history, and silently deleting data on disconnect would be a surprise.
+   */
+  clearGoogleHealth(id) {
+    return User.findByIdAndUpdate(id, { $unset: { googleHealth: '' } }, { new: true });
   }
 }
 

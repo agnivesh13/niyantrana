@@ -23,6 +23,17 @@ router.post('/auth/login', authController.login);
 router.post('/auth/logout', authController.logout);
 router.get('/auth/me', authenticate, authController.me);
 
+// Google Identity Services. Non-sensitive scopes (openid, email, profile), so
+// this needs no OAuth review and works for every user.
+router.post('/auth/google', asyncHandler(authController.google));
+
+// Google Health API consent. Separate from sign-in on purpose: these scopes are
+// Restricted, so until the app passes OAuth verification only accounts added as
+// test users in the Google Cloud console can complete this flow.
+router.get('/auth/google/health', authenticate, asyncHandler(wearableController.googleHealthStart));
+router.get('/auth/google/health/callback', authenticate,
+  asyncHandler(wearableController.googleHealthCallback));
+
 // --- Profile and wearable data ---
 router.get('/api/user/status', authenticate, asyncHandler(userController.getStatus));
 router.post('/api/user/profile', authenticate, asyncHandler(userController.saveProfile));
@@ -51,6 +62,13 @@ router.post('/api/logs/activity', authenticate, asyncHandler(logController.logAc
 router.get('/api/wearable/formats', wearableController.importFormats);
 router.post('/api/wearable/import', authenticate, asyncHandler(wearableController.importWearableData));
 router.post('/api/wearable/demo', authenticate, asyncHandler(wearableController.loadDemoData));
+
+router.get('/api/wearable/google-health', authenticate,
+  asyncHandler(wearableController.googleHealthStatus));
+router.post('/api/wearable/google-health/sync', authenticate,
+  asyncHandler(wearableController.googleHealthSync));
+router.delete('/api/wearable/google-health', authenticate,
+  asyncHandler(wearableController.googleHealthDisconnect));
 
 // --- Conversational assistant ---
 // Server-side proxy: the Gemini key must never reach the browser, which is

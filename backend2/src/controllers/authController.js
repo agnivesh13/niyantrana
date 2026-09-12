@@ -39,6 +39,28 @@ export function logout(req, res, next) {
   });
 }
 
+/**
+ * Sign in with a Google ID token from Google Identity Services.
+ *
+ * The browser sends the credential it received from Google; this verifies it
+ * server-side and then opens the same Passport session a password sign-in
+ * would. One session mechanism, so nothing downstream needs to know which
+ * button the user pressed.
+ */
+export async function google(req, res, next) {
+  const user = await authService.signInWithGoogle(req.body?.credential);
+  return req.logIn(user, (loginErr) => {
+    if (loginErr) return next(loginErr);
+    return res.json({
+      success: true,
+      user: { id: user.id, email: user.email, status: user.status },
+      // The client routes a brand-new account to onboarding rather than to an
+      // empty dashboard.
+      isNew: !user.canBeAssessed(),
+    });
+  });
+}
+
 export function me(req, res) {
   res.json({ user: { id: req.user.id, email: req.user.email, status: req.user.status } });
 }

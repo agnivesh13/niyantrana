@@ -21,7 +21,7 @@ import apiService, { ApiError } from '../services/apiService.jsx';
 import { CONDITION_LABEL, CONDITION_ORDER, formatScore } from '../lib/utils.js';
 import {
   Alert, BandPill, Button, Card, CardBody, CardDescription, CardHeader, CardTitle,
-  Disclaimer, EmptyState, ProvenanceTag, Skeleton,
+  Disclaimer, EmptyState, ProvenanceTag, Skeleton, Spinner,
 } from '../ui/primitives.jsx';
 import RiskCard from '../components/RiskCard.jsx';
 
@@ -31,6 +31,15 @@ import RiskCard from '../components/RiskCard.jsx';
  * bundle the landing and sign-in screens download.
  */
 const TrajectoryChart = lazy(() => import('../components/TrajectoryChart.jsx'));
+
+/**
+ * How many wake-and-retry rounds before reporting failure.
+ *
+ * Each round resolves as soon as the service answers — typically ~35 seconds on
+ * a cold start — so three rounds cover a slow start without turning a genuine
+ * outage into an endless spinner.
+ */
+const WAKE_ROUNDS = 3;
 
 /** Biomarkers, with the units the API reports them in. */
 const BIOMARKERS = [
@@ -105,12 +114,46 @@ function NotReadyState({ error, onRetry }) {
 }
 
 /**
+ * Waking the inference container.
+ *
+ * Shows elapsed seconds and which attempt is running, because the wait is real
+ * — a spun-down container measured 35 seconds just to answer a health check.
+ * Without a visible clock this is indistinguishable from a hang, which is
+ * exactly what it looked like before.
+ */
+function WakingState({ seconds, attempt, rounds }) {
+  return (
+    <Card>
+      <CardBody className="flex items-start gap-4 pt-6">
+        <Spinner className="mt-0.5" label="Waking the model service" />
+        <div>
+          <p className="font-medium text-primary">
+            Waking the model
+            <span className="ml-2 font-normal text-muted tabular">{seconds}s</span>
+          </p>
+          <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-secondary">
+            The inference service sleeps after fifteen minutes idle on its free tier and
+            takes the best part of a minute to start. This request is holding the
+            connection open until it answers; your assessment will load by itself.
+          </p>
+          {attempt > 1 && (
+            <p className="mt-1.5 text-xs text-muted">
+              Attempt {attempt} of {rounds}.
+            </p>
+          )}
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
  * The model is unreachable.
  *
- * This screen exists so that this case has somewhere honest to land. The free
- * hosting tier sleeps after fifteen minutes, so the first request after an idle
- * period can legitimately time out -- and the correct response to that is to
- * say so and offer a retry, never to substitute a number.
+ * This screen exists so that this case has somewhere honest to land. It is only
+ * reached after a wake-up call and a second attempt have both failed, so it is
+ * no longer the cold-start case — something is actually wrong. Either way, no
+ * number is substituted.
  */
 function UnavailableState({ error, onRetry }) {
   return (
@@ -126,13 +169,13 @@ function UnavailableState({ error, onRetry }) {
       </CardHeader>
       <CardBody className="space-y-4">
         <p className="text-sm leading-relaxed text-secondary">
-          No score is shown because none was produced. The inference service runs on a free
-          tier that sleeps when idle, so a first request after a quiet spell can take up to
-          a minute to wake it.
+          No score is shown because none was produced. The service was given {WAKE_ROUNDS} wake-up
+          calls, each waiting out the full cold-start window, and still did not answer — so
+          this is longer than a cold start explains.
         </p>
         <Button onClick={onRetry}>
           <RefreshCw className="size-4" aria-hidden />
-          Retry
+          Try again
         </Button>
       </CardBody>
     </Card>
@@ -231,16 +274,86 @@ export default function DashboardPage() {
   const [assessment, setAssessment] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [waking, setWaking] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
+  /**
+   * Fetch an assessment, waking the model service if it is asleep.
+   *
+   * A 503 here is usually not a fault: the inference container spins down after
+   * fifteen minutes idle, and the API's own budget can run out while it boots.
+   * Reporting that to a first-time visitor as "the model is not answering"
+   * describes a working system as a broken one.
+   *
+   * So a 503 starts a wake-and-retry loop. Two details matter, and both were
+   * wrong in the first version of this:
+   *
+   *   1. **The wake call must hold the connection open.** `wakeInference` hits
+   *      `?wake=1`, which waits for the cold-start window instead of the
+   *      5-second probe window. The probe aborted long before a ~35-second
+   *      container start, so it reported the service unreachable at exactly the
+   *      moment it was booting, and woke nothing.
+   *   2. **One attempt is not enough.** If the wake call gives up, the container
+   *      may still be starting, so the next round waits again rather than
+   *      reporting failure. Previously the UI tried once and then sat there —
+   *      which is why twenty minutes of waiting produced no further requests.
+   *
+   * Bounded at WAKE_ROUNDS. This is a retry loop, not a poll: when the rounds
+   * are spent the failure is reported, because a service that will not start is
+   * a real fault and hiding it behind an endless spinner is the other failure
+   * mode.
+   */
   const assess = useCallback(async () => {
     setLoading(true);
+    setWaking(false);
     setError(null);
+    setSeconds(0);
+    setAttempt(0);
+
+    let ticker;
     try {
-      setAssessment(await apiService.risk.assess());
-    } catch (requestError) {
-      setError(requestError);
-      setAssessment(null);
+      try {
+        setAssessment(await apiService.risk.assess());
+        return;
+      } catch (first) {
+        const status = first instanceof ApiError ? first.status : 500;
+        if (status !== 503 && status !== 0) {
+          setError(first);
+          setAssessment(null);
+          return;
+        }
+      }
+
+      setWaking(true);
+      const startedAt = Date.now();
+      ticker = setInterval(
+        () => setSeconds(Math.round((Date.now() - startedAt) / 1000)), 1000);
+
+      for (let round = 1; round <= WAKE_ROUNDS; round += 1) {
+        setAttempt(round);
+        const woke = await apiService.risk.wakeInference()
+          .then(() => true)
+          .catch(() => false);
+
+        // Still booting: wait again rather than spending an assessment attempt
+        // on a container that has not finished starting.
+        if (!woke && round < WAKE_ROUNDS) continue;
+
+        try {
+          setAssessment(await apiService.risk.assess());
+          setError(null);
+          return;
+        } catch (retryError) {
+          if (round === WAKE_ROUNDS) {
+            setError(retryError);
+            setAssessment(null);
+          }
+        }
+      }
     } finally {
+      if (ticker) clearInterval(ticker);
+      setWaking(false);
       setLoading(false);
     }
   }, []);
@@ -260,7 +373,11 @@ export default function DashboardPage() {
     return risks.reduce((worst, risk) => (risk.score > worst.score ? risk : worst));
   }, [risks]);
 
-  if (loading) return <LoadingState />;
+  if (loading) {
+    return waking
+      ? <WakingState seconds={seconds} attempt={attempt} rounds={WAKE_ROUNDS} />
+      : <LoadingState />;
+  }
 
   if (error) {
     const status = error instanceof ApiError ? error.status : 500;

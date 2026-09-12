@@ -17,7 +17,16 @@ export async function recommend(req, res) {
   res.json(await riskService.recommendMeal(req.user.id, req.body?.meal));
 }
 
-export async function inferenceHealth(_req, res) {
-  const health = await inferenceClient.health();
+/**
+ * Inference liveness.
+ *
+ * `?wake=1` turns this into a wake-up call: it holds the request open for the
+ * cold-start window instead of the 5-second probe window, so a client can
+ * actually start a spun-down container rather than merely observe that it is
+ * asleep. The client uses it before an assessment; a monitor should not.
+ */
+export async function inferenceHealth(req, res) {
+  const wake = ['1', 'true', 'yes'].includes(String(req.query.wake).toLowerCase());
+  const health = await inferenceClient.health({ wake });
   res.status(health.reachable ? 200 : 503).json(health);
 }

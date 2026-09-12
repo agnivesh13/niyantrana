@@ -69,6 +69,15 @@ export const auth = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   me: () => request('/auth/me'),
+
+  /**
+   * Exchange a Google Identity Services credential for a session.
+   *
+   * The credential is an ID token that only Google can have signed; the server
+   * verifies it against Google's public keys. Nothing here is trusted client
+   * side, which is why the browser never decodes it.
+   */
+  google: (credential) => request('/auth/google', { method: 'POST', body: { credential } }),
 };
 
 export const user = {
@@ -98,12 +107,42 @@ export const risk = {
    */
   assess: () => request('/api/predict', { method: 'POST', body: {} }),
   recommendMeal: (meal) => request('/api/recommend', { method: 'POST', body: { meal } }),
+
+  /** Reachability of the inference service. Unauthenticated, fails fast. */
+  inferenceHealth: () => request('/api/inference/health'),
+
+  /**
+   * Wake the inference service, and wait for it.
+   *
+   * `?wake=1` makes the API hold the request open for its cold-start window
+   * instead of the 5-second probe window. That distinction is the whole fix:
+   * the probe aborted after 5s while a spun-down container takes ~35s to answer,
+   * so the old "wake-up call" reported the service unreachable at exactly the
+   * moment it was starting, and woke nothing.
+   */
+  wakeInference: () => request('/api/inference/health?wake=1'),
 };
 
 export const wearable = {
   formats: () => request('/api/wearable/formats'),
   import: (data, source = 'import') => request('/api/wearable/import', { method: 'POST', body: { data, source } }),
   loadDemo: (days = 90) => request('/api/wearable/demo', { method: 'POST', body: { days } }),
+
+  // --- Google Health ---
+  googleHealthStatus: () => request('/api/wearable/google-health'),
+  googleHealthSync: (days = 90) =>
+    request('/api/wearable/google-health/sync', { method: 'POST', body: { days } }),
+  googleHealthDisconnect: () =>
+    request('/api/wearable/google-health', { method: 'DELETE' }),
+
+  /**
+   * Where to send the browser to grant Google Health access.
+   *
+   * A full navigation rather than a fetch: the flow redirects to Google and
+   * back, which an XHR cannot follow. Absolute, because in production the API
+   * is on a different host from this bundle.
+   */
+  googleHealthConnectUrl: () => `${API_BASE}/auth/google/health`,
 };
 
 export const chat = {

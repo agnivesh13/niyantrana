@@ -11,11 +11,13 @@
  * Credentials now go to the server and the server decides. A failed sign-in
  * shows the server message rather than a guess at what went wrong.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import apiService from '../services/apiService.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { Alert, Button, Card, Disclaimer, Field, Input } from '../ui/primitives.jsx';
+import GoogleSignInButton, { googleSignInAvailable } from '../components/GoogleSignInButton.jsx';
 import Wordmark from '../components/Wordmark.jsx';
 
 const MIN_PASSWORD = 8;
@@ -28,8 +30,13 @@ export default function SignInPage() {
   const [formError, setFormError] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const { login, signup, isAuthenticated, isLoading } = useAuth();
+  const { login, signup, signInWithGoogle, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Start the model service warming while credentials are being typed. Same
+  // reasoning as the landing page: the wait is unavoidable on a free tier, so
+  // it may as well happen during a wait the user is already having.
+  useEffect(() => { apiService.risk.wakeInference().catch(() => null); }, []);
 
   // Already signed in: the router decides where to go, not this screen.
   if (!isLoading && isAuthenticated) return <Navigate to="/dashboard" replace />;
@@ -59,6 +66,27 @@ export default function SignInPage() {
     navigate(isSignup ? '/onboarding' : '/dashboard', { replace: true });
   };
 
+  /**
+   * Google hands back a credential; the server decides what it means.
+   *
+   * A first-time Google account goes to onboarding, an existing one to the
+   * dashboard. There is no separate Google sign-up button: the account is
+   * created on first sign-in, and two identical buttons would be a choice with
+   * no meaning behind it.
+   */
+  const onGoogleCredential = async (credential) => {
+    setFormError(null);
+    setBusy(true);
+    const result = await signInWithGoogle(credential);
+    setBusy(false);
+
+    if (!result.success) {
+      setFormError(result.error);
+      return;
+    }
+    navigate(result.isNew ? '/onboarding' : '/dashboard', { replace: true });
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-ground">
       <header className="border-b border-line bg-surface">
@@ -79,6 +107,20 @@ export default function SignInPage() {
           </p>
 
           <Card className="mt-6 p-6 sm:p-8">
+            {googleSignInAvailable && (
+              <>
+                <GoogleSignInButton
+                  onCredential={onGoogleCredential}
+                  text={isSignup ? 'signup_with' : 'signin_with'}
+                />
+                <div className="my-6 flex items-center gap-3">
+                  <span className="h-px flex-1 bg-line" />
+                  <span className="text-xs text-muted">or</span>
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+              </>
+            )}
+
             <form onSubmit={submit} className="space-y-5" noValidate>
               <Field label="Email" htmlFor="email">
                 <Input

@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — Niyantrana</title>
+<meta name="description" content="How Niyantrana collects, uses, stores and shares your data, including data obtained from Google APIs." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a73e8'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-size='20' font-weight='700' fill='white' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E" />
+<!--
+  Deliberately a static HTML file, not a route in the single-page app.
+
+  Google's verification crawler fetches this URL directly, and a client-rendered
+  route can return an empty shell to anything that does not execute JavaScript --
+  which reads to a reviewer as "your privacy policy page does not have
+  sufficient content", the exact rejection this page exists to answer. Every
+  word below is in the HTML source.
+-->
+<style>
+  :root {
+    --ink: #202124; --ink-2: #5f6368; --ink-3: #80868b;
+    --line: #e8eaed; --ground: #f8f9fa; --accent: #1a73e8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 16px/1.65 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  header { background: #fff; border-bottom: 1px solid var(--line); }
+  .bar, main { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
+  .bar { display: flex; align-items: center; gap: .6rem; height: 4rem; }
+  .mark {
+    display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
+    border-radius: .5rem; background: var(--accent); color: #fff;
+    font-weight: 700; font-size: .9rem;
+  }
+  .mark + span { font-weight: 600; font-size: 1.05rem; letter-spacing: -.01em; }
+  a { color: var(--accent); }
+  main { padding-bottom: 4rem; }
+  h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -.02em; margin: 2.5rem 0 .5rem; }
+  h2 { font-size: 1.2rem; margin: 2.5rem 0 .5rem; letter-spacing: -.01em; }
+  h3 { font-size: 1rem; margin: 1.5rem 0 .35rem; }
+  p, li { color: var(--ink-2); }
+  li { margin: .3rem 0; }
+  .updated { color: var(--ink-3); font-size: .875rem; margin-top: 0; }
+  .callout {
+    background: #fff; border: 1px solid var(--line); border-radius: .75rem;
+    padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9375rem; }
+  th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink-2); }
+  code { font-size: .875em; background: #fff; border: 1px solid var(--line); border-radius: .25rem; padding: .1rem .3rem; }
+  footer { border-top: 1px solid var(--line); background: #fff; }
+  footer .bar { height: auto; padding: 1.5rem 1.25rem; display: block; color: var(--ink-3); font-size: .875rem; }
+  footer a { margin-right: 1rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <span class="mark">N</span><span>Niyantrana</span>
+  </div>
+</header>
+
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated 13 September 2026</p>
+
+  <p>
+    Niyantrana is a metabolic-health screening tool operated by an individual developer,
+    Swami Agnivesh, as a personal and educational project. It estimates risk of fatty
+    liver, raised blood pressure, raised blood sugar and type-2 diabetes from the things
+    you record: your basic body measurements, the meals you log, and day-level activity,
+    sleep and heart-rate data from a wearable device.
+  </p>
+
+  <div class="callout">
+    <strong>Niyantrana is not a medical device and does not diagnose anything.</strong>
+    Every score it produces is a screening estimate. Confirm any concern with a clinician
+    and a real blood test.
+  </div>
+
+  <h2>1. Who is responsible for your data</h2>
+  <p>
+    This app is run by one person, not a company. Questions, data access requests and
+    deletion requests all go to the same address:
+    <a href="mailto:agniveshshaga@gmail.com">agniveshshaga@gmail.com</a>.
+  </p>
+
+  <h2>2. What the app collects</h2>
+  <p>
+    Only what a risk estimate actually needs. There is no advertising, no analytics or
+    tracking script of any kind, and no third-party cookie in this application.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Data</th><th>Why it is collected</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Account</strong> — your email address; a bcrypt hash of your password
+          if you use one; your Google account identifier if you sign in with Google</td>
+        <td>To create your account and keep your records separate from anyone else's. If
+          you sign in with Google, we store only your email address and Google's opaque
+          account identifier — not your name or profile picture.</td>
+      </tr>
+      <tr>
+        <td><strong>Profile</strong> — age, sex, height, weight, waist circumference,
+          family history of diabetes or liver disease, alcohol intake, smoking status</td>
+        <td>These are the inputs of the risk models. Waist and BMI in particular drive the
+          fatty-liver estimate.</td>
+      </tr>
+      <tr>
+        <td><strong>Meals you log</strong> — the food chosen, servings, the resulting
+          macronutrients, and the time</td>
+        <td>Daily energy, fat, carbohydrate, protein, fibre and sugar totals are features
+          the models use.</td>
+      </tr>
+      <tr>
+        <td><strong>Measurements you enter</strong> — blood pressure, HbA1c,
+          triglycerides, GGT, fasting glucose, weight, waist</td>
+        <td>A real measured value replaces the model's estimate for that biomarker, which
+          makes your assessment more accurate than a prediction.</td>
+      </tr>
+      <tr>
+        <td><strong>Day-level wearable data</strong> — steps, active minutes, sleep
+          duration, sleep efficiency, resting heart rate, heart-rate variability, and which
+          source each day came from</td>
+        <td>The models score a 14-day window of this data, and the risk trend is produced
+          by scoring successive windows of your own history.</td>
+      </tr>
+      <tr>
+        <td><strong>Assessments produced</strong> — estimated biomarkers, risk scores and
+          bands, and where each number came from</td>
+        <td>Stored so your risk trend over time can be shown.</td>
+      </tr>
+      <tr>
+        <td><strong>Google Health access tokens</strong> — if you connect Google Health</td>
+        <td>To read the wearable data above on your behalf. Stored so you do not have to
+          re-authorise on every sync.</td>
+      </tr>
+      <tr>
+        <td><strong>A session cookie</strong></td>
+        <td>To keep you signed in. It is <code>HttpOnly</code>, so page scripts cannot read
+          it, and it is not used for tracking.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Data obtained from Google APIs</h2>
+
+  <h3>Sign in with Google</h3>
+  <p>
+    If you use the Google button, Niyantrana requests the <code>openid</code>,
+    <code>email</code> and <code>profile</code> scopes. It reads your email address and
+    Google account identifier to create or find your account, and stores only those two
+    things. The credential Google issues is verified on our server against Google's public
+    keys and then discarded.
+  </p>
+
+  <h3>Google Health API</h3>
+  <p>
+    If — and only if — you choose to connect Google Health, Niyantrana requests read-only
+    access to your activity and fitness, sleep, and health-metrics data. It reads exactly
+    six values per day: steps, active minutes, sleep duration, sleep efficiency, daily
+    resting heart rate and daily heart-rate variability. It requests no write access, and
+    it does not read your location, ECG, nutrition logs or reproductive-health data.
+  </p>
+  <p>
+    Those daily values are stored on your account and used for one purpose: producing the
+    risk scores and the risk trend that the app shows you. You can disconnect at any time
+    from the app's onboarding screen, or revoke access directly at
+    <a href="https://myaccount.google.com/permissions" rel="noopener">your Google account
+    permissions page</a>. Disconnecting stops all further reading immediately.
+  </p>
+
+  <div class="callout">
+    <h3 style="margin-top:0">Limited Use commitment</h3>
+    <p style="margin-bottom:0">
+      Niyantrana's use and transfer of information received from Google APIs adheres to the
+      <a href="https://developers.google.com/terms/api-services-user-data-policy"
+         rel="noopener">Google API Services User Data Policy</a>, including its Limited Use
+      requirements. Concretely: data from Google APIs is used only to provide the
+      risk-screening features you can see in the app; it is never used for advertising; it
+      is never sold or transferred to anyone for their own purposes; and no human reads it,
+      including the developer.
+    </p>
+  </div>
+
+  <h2>4. Who your data is shared with</h2>
+  <p>
+    Your data is never sold, rented, or shared for advertising. It reaches only the
+    services required to run the app:
+  </p>
+  <ul>
+    <li><strong>MongoDB Atlas</strong> — the database that stores your account and
+      records. Encrypted in transit and at rest.</li>
+    <li><strong>Render</strong> — hosts the application server and the machine-learning
+      service, both operated by the developer.</li>
+    <li><strong>Cloudflare</strong> — serves the web pages themselves.</li>
+    <li><strong>Google Gemini API</strong> — if you use the in-app assistant, the message
+      you type is sent to Google's Gemini API together with a short summary of your most
+      recent assessment, so the answer can refer to your own numbers. If you never open
+      the assistant, nothing is sent. Your email address and account identifier are never
+      included.</li>
+  </ul>
+  <p>
+    The risk models themselves run on the developer's own server. Your measurements are not
+    sent to any third-party machine-learning provider.
+  </p>
+
+  <h2>5. Where your data is processed</h2>
+  <p>
+    On servers operated by the providers above, which may be located outside India,
+    including in the United States and the European Union.
+  </p>
+
+  <h2>6. How long it is kept, and how to delete it</h2>
+  <p>
+    Your records are kept for as long as your account exists, because the risk trend is
+    built from your own history and deleting the history removes the feature.
+  </p>
+  <ul>
+    <li><strong>Disconnect Google Health</strong> at any time in the app. Access stops
+      immediately and the stored tokens are deleted. Wearable days already imported are
+      kept, because they are your own history — ask for deletion if you want them gone
+      too.</li>
+    <li><strong>Delete everything</strong> by emailing
+      <a href="mailto:agniveshshaga@gmail.com">agniveshshaga@gmail.com</a> from your
+      account's email address. Your account and all associated records — profile, meals,
+      measurements, wearable days, assessments and tokens — are deleted within 30 days,
+      and normally much sooner.</li>
+    <li><strong>Ask for a copy</strong> of your data at the same address.</li>
+  </ul>
+
+  <h2>7. Security</h2>
+  <ul>
+    <li>All traffic is served over HTTPS.</li>
+    <li>Passwords are stored only as bcrypt hashes. If you sign in with Google there is no
+      password at all.</li>
+    <li>Google Health tokens and password hashes are excluded from database queries by
+      default, so ordinary application code cannot read them.</li>
+    <li>The session cookie is <code>HttpOnly</code> and <code>Secure</code>.</li>
+    <li>No API key or secret is included in the code that runs in your browser.</li>
+  </ul>
+  <p>
+    This is a personal project run by one developer, not an accredited medical service. It
+    is not certified under HIPAA or any equivalent framework. Please decide what you record
+    here with that in mind.
+  </p>
+
+  <h2>8. Children</h2>
+  <p>
+    Niyantrana is not intended for anyone under 18, and the risk models were fitted on
+    adults only. Accounts are not knowingly created for children.
+  </p>
+
+  <h2>9. A limitation worth stating plainly</h2>
+  <p>
+    The risk models were trained on NHANES 2013–2018, a United States population. South
+    Asians develop metabolic disease at lower BMI and waist thresholds, so scores are
+    systematically off for the population this app was built for. This is documented in the
+    project's own results write-up rather than hidden.
+  </p>
+
+  <h2>10. Changes</h2>
+  <p>
+    If this policy changes, the date at the top changes with it. Material changes affecting
+    how Google API data is handled will be announced in the app before they take effect.
+  </p>
+
+  <h2>11. Contact</h2>
+  <p>
+    Swami Agnivesh —
+    <a href="mailto:agniveshshaga@gmail.com">agniveshshaga@gmail.com</a>
+  </p>
+</main>
+
+<footer>
+  <div class="bar">
+    <a href="/">Home</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/terms">Terms of Service</a>
+    <p style="margin:.75rem 0 0">
+      A screening estimate, not a diagnosis. Niyantrana is not a medical device.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

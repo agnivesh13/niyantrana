@@ -12,9 +12,9 @@
  * seeded history means a reviewer with no device still sees a working app --
  * with every seeded row tagged `source: demo` in the database.
  */
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Check, Upload } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, Link as LinkIcon, Upload } from 'lucide-react';
 
 import apiService from '../services/apiService.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -171,6 +171,150 @@ function ProfileStep({ onDone }) {
   );
 }
 
+/**
+ * Connect Google Health.
+ *
+ * The live first-party path, and the successor to both Google Fit (closed to
+ * new developers on 1 May 2024, deprecated 2026) and the Fitbit Web API (turned
+ * down September 2026).
+ *
+ * The test-user limit is stated on the card rather than discovered at Google's
+ * consent screen. Every Health API scope is Restricted, so until this app
+ * passes OAuth verification — which includes a third-party security review —
+ * only accounts added as test users in the Google Cloud console can connect.
+ * Someone clicking a button that cannot work for them deserves to know why
+ * before they click it, not after.
+ */
+function GoogleHealthCard({ onSynced }) {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [report, setReport] = useState(null);
+  const [params, setParams] = useSearchParams();
+
+  const load = useCallback(async () => {
+    try {
+      setStatus(await apiService.wearable.googleHealthStatus());
+    } catch {
+      // Not fatal: the other two paths still work, so a status failure hides
+      // this card rather than blocking onboarding.
+      setStatus({ configured: false, connected: false });
+    }
+  }, []);
+
+  const sync = useCallback(async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const response = await apiService.wearable.googleHealthSync(DEMO_DAYS);
+      setReport(response);
+      if (response.imported > 0) onSynced(`Synced ${response.imported} days from Google Health.`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+      load();
+    }
+  }, [onSynced, load]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Returning from Google's consent screen. The backend put the outcome in the
+  // query string because it redirects a browser, not an XHR.
+  useEffect(() => {
+    const outcome = params.get('google_health');
+    if (!outcome) return;
+    params.delete('google_health');
+    params.delete('reason');
+    params.delete('scopes');
+    setParams(params, { replace: true });
+    if (outcome === 'connected') sync();
+    else setError('Google access was not granted.');
+  }, [params, setParams, sync]);
+
+  if (!status?.configured) return null;
+
+  return (
+    <div className="rounded border border-accent/30 bg-accent-soft/40 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium text-primary">Connect Google Health</h3>
+          <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-secondary">
+            Reads steps, active minutes, sleep, resting heart rate and HRV straight from
+            your Google account — the successor to Google Fit and the Fitbit Web API, both
+            of which shut down in 2026.
+          </p>
+        </div>
+        {status.connected ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-status-good-soft px-2.5 py-1 text-xs font-medium text-status-good">
+            <Check className="size-3.5" aria-hidden />
+            Connected
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        {status.connected ? (
+          <>
+            <Button size="sm" loading={busy} onClick={sync}>Sync {DEMO_DAYS} days</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                await apiService.wearable.googleHealthDisconnect();
+                load();
+              }}
+            >
+              Disconnect
+            </Button>
+          </>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => window.location.assign(apiService.wearable.googleHealthConnectUrl())}
+          >
+            <LinkIcon className="size-4" aria-hidden />
+            Connect
+          </Button>
+        )}
+      </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-muted">
+        Google classifies every Health API scope as Restricted, so this works for accounts
+        added as test users in the project console until the app passes OAuth verification.
+        If that is not you, use a file export below.
+      </p>
+
+      {error && <Alert tone="error" className="mt-3">{error}</Alert>}
+
+      {/* What actually arrived, per feature. A sync that finds nothing is a
+          common and legitimate outcome — an account with no paired device — and
+          saying which fields came back is the difference between diagnosing
+          that and assuming the integration is broken. */}
+      {report && (
+        <div className="mt-3 rounded border border-line bg-surface p-3">
+          <p className="text-xs font-medium text-primary">
+            {report.imported > 0
+              ? `${report.imported} days merged (${report.range?.from} to ${report.range?.to})`
+              : 'No days returned'}
+          </p>
+          {report.notice && <p className="mt-1 text-xs text-secondary">{report.notice}</p>}
+          <ul className="mt-2 space-y-0.5">
+            {Object.entries(report.report ?? {}).map(([feature, detail]) => (
+              <li key={feature} className="flex justify-between gap-3 text-[11px]">
+                <span className="text-secondary">{feature.replace(/_/g, ' ')}</span>
+                <span className={detail.days > 0 ? 'text-status-good' : 'text-muted'}>
+                  {detail.days > 0 ? `${detail.days} days` : (detail.error ?? 'none')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WearableStep({ onDone }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -214,9 +358,12 @@ function WearableStep({ onDone }) {
   return (
     <div className="space-y-5">
       <p className="text-sm leading-relaxed text-secondary">
-        An assessment scores a 14-day window, and a trend needs at least 28 days. Import an
-        export from your device, or load a demo history to see the app working now.
+        An assessment scores a 14-day window, and a trend needs at least 28 days. Connect
+        Google Health, import an export from your device, or load a demo history to see the
+        app working now.
       </p>
+
+      <GoogleHealthCard onSynced={setResult} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded border border-line p-4">

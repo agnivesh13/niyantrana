@@ -25,8 +25,8 @@ const watchDataSchema = new mongoose.Schema({
   // demo account must be able to tell seeded data from a real device export.
   source: {
     type: String,
-    enum: ['fitbit', 'apple_health', 'oura', 'withings', 'google_takeout',
-      'import', 'manual', 'demo'],
+    enum: ['google_health', 'fitbit', 'apple_health', 'oura', 'withings',
+      'google_takeout', 'import', 'manual', 'demo'],
     default: 'manual',
   },
 }, { _id: false });
@@ -64,24 +64,58 @@ const staticDataSchema = new mongoose.Schema({
   bmr: Number,
 }, { _id: false });
 
-const fitbitSchema = new mongoose.Schema({
-  userId: String,
+/**
+ * Google Health API tokens.
+ *
+ * Replaces the Fitbit block, which was schema for an API that closed to new
+ * registrations before it could be used and is turned down in September 2026.
+ *
+ * Tokens are `select: false` for the same reason `password` is: a query that
+ * forgets to exclude them should not be able to leak them. Only the client that
+ * refreshes them asks for them explicitly.
+ */
+const googleHealthSchema = new mongoose.Schema({
+  // Google's own account identifier, from the identity endpoint. Stored so a
+  // reconnection can be recognised as the same account.
+  googleUserId: String,
   accessToken: { type: String, select: false },
   refreshToken: { type: String, select: false },
   expiresAt: Date,
+  // Recorded because the granted scopes can be narrower than the requested
+  // ones: a user may allow activity and refuse sleep, and a sync that assumes
+  // otherwise would report a failure rather than a partial result.
+  scopes: { type: [String], default: [] },
   connectedAt: Date,
+  lastSyncedAt: Date,
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
   email: {
     type: String, required: true, unique: true, lowercase: true, trim: true, index: true,
   },
-  password: { type: String, required: true, select: false },
+  /**
+   * Google account subject claim, when the user signed in with Google.
+   *
+   * `sparse` so the unique index ignores password-only accounts rather than
+   * treating their missing googleId as a duplicate null.
+   */
+  googleId: { type: String, index: true, unique: true, sparse: true },
+  /**
+   * Required only for password accounts.
+   *
+   * A Google-only account has no password to store, and inventing a random one
+   * would leave an unusable credential in the database that looks usable.
+   */
+  password: {
+    type: String,
+    select: false,
+    required: function passwordRequired() { return !this.googleId; },
+  },
   status: { type: String, enum: ['calibrating', 'active'], default: 'calibrating' },
   staticData: { type: staticDataSchema, default: () => ({}) },
   watchHistory: { type: [watchDataSchema], default: [] },
   healthHistory: { type: [healthReportSchema], default: [] },
-  fitbit: { type: fitbitSchema, select: false },
+  googleHealth: { type: googleHealthSchema, select: false },
 }, { timestamps: true });
 
 /** Whether enough profile data exists to run an assessment. */

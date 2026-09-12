@@ -79,6 +79,26 @@ export const AuthProvider = ({ children }) => {
     }
   }, [refresh]);
 
+  /**
+   * Sign in with a Google credential.
+   *
+   * Returns `isNew` so the caller can route a fresh account to onboarding
+   * instead of a dashboard that has nothing to show yet. There is no separate
+   * Google "sign up": the server creates the account on first sign-in, because
+   * asking someone to choose between two identical Google buttons is a choice
+   * with no meaning.
+   */
+  const signInWithGoogle = useCallback(async (credential) => {
+    setError(null);
+    try {
+      const response = await apiService.auth.google(credential);
+      return { success: true, user: await refresh(), isNew: response.isNew };
+    } catch (requestError) {
+      setError(requestError.message);
+      return { success: false, error: requestError.message };
+    }
+  }, [refresh]);
+
   const logout = useCallback(async () => {
     try {
       await apiService.auth.logout();
@@ -108,10 +128,11 @@ export const AuthProvider = ({ children }) => {
     error,
     login,
     signup,
+    signInWithGoogle,
     logout,
     saveProfile,
     refresh,
-  }), [user, isLoading, error, login, signup, logout, saveProfile, refresh]);
+  }), [user, isLoading, error, login, signup, signInWithGoogle, logout, saveProfile, refresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

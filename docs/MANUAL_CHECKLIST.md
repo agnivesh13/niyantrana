@@ -35,7 +35,25 @@ had never once succeeded before this point.
 
 ---
 
-## Priority 1 — one more push (RAG retrieval was silently ungrounded)
+## Priority 1 — one push, now covering three fixes
+
+**Deploy both services together.** The cold-start fix is split across them: the
+frontend asks for `?wake=1`, and only the new backend honours it. Rebuild the
+client without redeploying the API and the wake call still aborts after 5
+seconds, which is the bug.
+
+### Fix 3 — the cold-start wake-up call never woke anything
+
+`GET /api/inference/health` used a **5-second** timeout. A spun-down Render
+container measured **34.9 seconds** just to answer it, so the call aborted seven
+times too early, reported `reachable: false`, and started nothing. The dashboard
+then tried once and stopped — which is why twenty minutes of waiting produced no
+further requests, while a `curl -m 120` woke the service immediately.
+
+Fixed with `?wake=1`, which waits out the full cold-start window, plus up to
+three wake-and-retry rounds in the dashboard with the elapsed time on screen.
+
+### Fix 1 and 2 — RAG retrieval was silently ungrounded
 
 `/api/recommend` worked but returned `alternatives_considered: []` every time,
 so Gemini was improvising while being told "do not invent new dishes".
@@ -141,6 +159,7 @@ Done, so these are off your list:
 | Mobile responsiveness pass | 14 | Checked in a browser at 390px; the nav collapses to icons and the chart drops its label rail and reclaims the width |
 | Bundle-size check | 14 | 24.6 kB gzip entry + 77.7 kB React; the 107.7 kB chart chunk loads only on the dashboard |
 | Render smoke check | — | `npm run smoke` mounts all nine trees through react-dom/server |
+| Cold-start handling | — | `?wake=1` holds a request open for the whole cold-start window (the plain 5s probe aborted 7x too early and woke nothing); landing and sign-in prewarm with it, and a 503 on the dashboard runs up to three wake-and-retry rounds with elapsed seconds shown |
 
 Still yours, because they need accounts or a device:
 
@@ -165,6 +184,155 @@ Also worth running once the client is hosted: **Lighthouse** (Chrome devtools ->
 Lighthouse -> Analyze). Nothing in the build is knowingly failing it, but I have
 not run it against a real deployment.
 
+## Google sign-in and Google Health — console setup is yours
+
+The code is built and tested; none of it does anything until the Google Cloud
+project is configured, and only you can do that. Project `niyantrana-backend`
+already exists, so this is configuration, not creation.
+
+### ☐ 1. One OAuth client, for both features — ~10 minutes
+
+`console.cloud.google.com`, project **niyantrana-backend**:
+
+1. **APIs & Services → Library →** enable **Google Health API**.
+2. **APIs & Services → OAuth consent screen** (Branding / Audience in the new
+   console): app name, support email, and a **privacy policy URL and terms URL**.
+   The Health scopes will not pass verification without those two, and the
+   consent screen looks untrustworthy without them even in testing.
+3. **Audience → Test users → Add users.** Add your own Google account, plus
+   anyone who should be able to connect. **This is the gate that matters:** every
+   Health API scope is Restricted, so until the app passes OAuth verification
+   only these accounts can complete the flow. Up to 100.
+4. **Credentials → Create credentials → OAuth client ID → Web application:**
+
+   | Field | Value |
+   |---|---|
+   | Authorised JavaScript origins | `http://localhost:5173` and your Pages URL |
+   | Authorised redirect URIs | `http://localhost:8080/auth/google/health/callback` and `https://niyantrana-api.onrender.com/auth/google/health/callback` |
+
+   The redirect URI must match **exactly** — scheme, host, port, path, no
+   trailing slash. A mismatch is Google's most common `redirect_uri_mismatch`.
+
+### ☐ 2. Set five environment variables — ~5 minutes
+
+Backend (`.env` locally, Environment on Render):
+
+```
+GOOGLE_CLIENT_ID=<client id>
+GOOGLE_CLIENT_SECRET=<client secret>
+GOOGLE_HEALTH_REDIRECT_URI=https://niyantrana-api.onrender.com/auth/google/health/callback
+GOOGLE_HEALTH_RETURN_URL=https://<your-pages-url>/onboarding
+```
+
+Frontend (`.env`, or the Pages build environment):
+
+```
+VITE_GOOGLE_CLIENT_ID=<the same client id>
+```
+
+The client ID is public by design; the **secret** goes only in the backend. If
+`VITE_GOOGLE_CLIENT_ID` is unset the Google button simply does not render, and
+the password form still works — so a half-configured deployment degrades
+instead of breaking.
+
+### ☐ 3. Put some data in the account — ~5 minutes
+
+A brand-new Google account has no health data, so a sync will correctly return
+nothing. Either pair a device, or install the **Google Health** app and log a
+few entries by hand — Google's own codelab uses exactly that method, so **no
+Fitbit or Pixel Watch is required**.
+
+### ☐ 4. Verify, and read the field report
+
+Sign in → onboarding → **Connect Google Health** → grant access. The app syncs
+automatically on return and prints a per-feature report:
+
+```
+daily steps              84 days
+active minutes           84 days
+sleep                    79 days
+resting heart rate       84 days
+heart rate variability   61 days
+```
+
+**Read that report rather than assuming.** The published API reference names
+some value fields exactly and describes others only as "interval data", so the
+adapter resolves each feature against candidate field paths. A feature showing
+`none` means its field name differs from every candidate — tell me what the
+report says and I will correct the mapping. It never writes a zero to cover a
+gap, so a wrong guess shows up as a missing feature, not as bad data.
+
+### ☐ 4b. Branding verification — fixing the two rejections
+
+Both errors from the verification attempt are configuration, and the pages they
+need now exist in the build (`/privacy` and `/terms`, static HTML).
+
+**Error 1: "The website of your homepage URL is not registered to you."**
+
+Google checks domain ownership in Search Console at the **top private domain**
+level, not the subdomain — so verifying `niyantrana.agnivesh.dev` is not enough,
+you must verify **`agnivesh.dev`**.
+
+1. `search.google.com/search-console`, signed in as the **same Google account
+   that owns the Cloud project** (agniveshshaga@gmail.com). A different account
+   is the most common reason this keeps failing after "successful" verification.
+2. Add property → **Domain** (not URL prefix) → `agnivesh.dev`.
+3. Add the TXT record it gives you at your DNS provider, then Verify. A Domain
+   property covers every subdomain, including this app's.
+
+**Error 2: "Your privacy policy page does not have sufficient content."**
+
+The cause is visible in the Branding form: the home page, privacy policy and
+terms fields all point at `https://niyantrana.agnivesh.dev` — the same page,
+which contains no policy. Set them to three distinct URLs:
+
+| Field | Value |
+|---|---|
+| Application home page | `https://niyantrana.agnivesh.dev` |
+| Application privacy policy link | `https://niyantrana.agnivesh.dev/privacy` |
+| Application Terms of Service link | `https://niyantrana.agnivesh.dev/terms` |
+| Authorised domain 1 | `agnivesh.dev` (already correct) |
+
+**Deploy the new build first**, or those two URLs will 404 and the rejection
+repeats. Then confirm the content is readable **without JavaScript**, which is
+how the crawler sees it:
+
+```bash
+curl -s https://niyantrana.agnivesh.dev/privacy | grep -c "Limited Use"   # expect 2
+curl -s https://niyantrana.agnivesh.dev/terms   | grep -c "Terms of Service"
+```
+
+Those two pages are deliberately static HTML rather than app routes: a
+client-rendered route returns an empty shell to anything that does not run
+JavaScript, which reads to a reviewer as exactly the "insufficient content"
+failure above.
+
+The homepage requirements are also now met in code — the landing page explains
+what Google data is requested and why, and links the privacy policy in its
+footer, both of which Google's homepage rules require.
+
+Then reopen the issues dialog, choose **I have fixed the issues**, and Proceed.
+
+**What passing branding does and does not buy you.** Branding verification makes
+your name and logo show on the consent screen and lets you publish. It is *not*
+the restricted-scope review. Expect:
+
+- **Sign in with Google** — works for everyone once published, because
+  `openid email profile` are non-sensitive.
+- **Connect Google Health** — still test-users-only, because those scopes are
+  Restricted and need the separate security assessment. The onboarding card
+  already says so on screen, so this degrades honestly rather than erroring.
+
+### ☐ 5. Optional: OAuth verification, for anyone beyond your test users
+
+Only needed if strangers should be able to connect their own health data.
+Requires the privacy policy and terms from step 1, a demo video, and a
+**third-party security review**. For a portfolio project this is usually not
+worth it: sign-in with Google works for everyone regardless, and reviewers can
+use the demo history. Decide deliberately rather than by default.
+
+---
+
 ## Known gaps I could not close
 
 Honest list. None of these block a deploy; all belong in the README's limitations section, where they already are.
@@ -176,7 +344,7 @@ Honest list. None of these block a deploy; all belong in the README's limitation
 | **GGT is unpredictable** (R² −0.001) | Genuinely not learnable from lifestyle features. Reported as a negative result |
 | **High probabilities are overconfident** | Dysglycaemia predicts 0.88 where 0.64 are observed. Thin bins (n=22), partly noise |
 | **Trajectory driven by wearable change only** | The profile is held constant across the window walk, so it understates improvement for someone also losing weight. Needs historical profile snapshots |
-| **No live wearable OAuth** | Every API a solo developer could register for has closed (Fitbit sunset this month; Google Health API gated behind restricted-scope review). Withings and Oura remain open if you want one |
+| **Google Health is limited to test users** | The integration is built and tested, but every Health scope is Restricted, so only accounts added in the Google Cloud console can connect until the app passes OAuth verification (which needs a third-party security review). Not a code limitation |
 
 ---
 

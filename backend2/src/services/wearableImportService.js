@@ -67,7 +67,7 @@ const RANGES = {
   calories_burned: [0, 20000],
 };
 
-const SUPPORTED_SOURCES = ['fitbit', 'apple_health', 'oura', 'withings',
+const SUPPORTED_SOURCES = ['google_health', 'fitbit', 'apple_health', 'oura', 'withings',
   'google_takeout', 'import', 'manual', 'demo'];
 
 function pick(record, aliases) {

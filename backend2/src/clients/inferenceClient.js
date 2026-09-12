@@ -18,6 +18,9 @@ import axios from 'axios';
 import config from '../config/env.js';
 import { InferenceUnavailableError, ValidationError } from '../domain/errors.js';
 
+/** A monitoring probe has to answer quickly or be treated as down. */
+const HEALTH_PROBE_TIMEOUT_MS = 5000;
+
 export class InferenceClient {
   constructor({ baseUrl = config.inferenceServiceUrl,
                 timeout = config.inferenceTimeoutMs,
@@ -126,18 +129,34 @@ export class InferenceClient {
     return this.#post('/recommend', { user_context: userContext, original_meal: meal });
   }
 
-  async health() {
+  /**
+   * Liveness, and optionally a wake-up call.
+   *
+   * Two timeouts, because this endpoint serves two purposes that want opposite
+   * things. A monitoring probe must answer fast: 5 seconds, fail and move on.
+   * A wake-up call must *hold the connection open* while a spun-down container
+   * starts, which measured 34.9 seconds in production — so a 5-second probe
+   * aborts roughly seven times too early and reports the service as unreachable
+   * at precisely the moment it is booting.
+   *
+   * That was the bug behind "the model is not answering, but it answered when
+   * you ran curl": curl held the request open for two minutes, the browser gave
+   * up after five seconds, and nothing in the UI tried again.
+   */
+  async health({ wake = false } = {}) {
+    const timeout = wake ? this.coldStartTimeout : HEALTH_PROBE_TIMEOUT_MS;
     // The URL is always reported. Diagnosing the production ENOTFOUND took an
     // extra round trip purely because this returned {reachable:false, reason}
     // without saying which address it had tried.
     try {
-      const { data } = await this.http.get(`${this.baseUrl}/health`, { timeout: 5000 });
-      return { reachable: true, url: this.baseUrl, ...data };
+      const { data } = await this.http.get(`${this.baseUrl}/health`, { timeout });
+      return { reachable: true, url: this.baseUrl, waited: wake, ...data };
     } catch (error) {
       return {
         reachable: false,
         url: this.baseUrl,
         reason: error.code || error.message,
+        waited: wake,
         hint: error.code === 'ENOTFOUND'
           ? 'The hostname does not resolve. On Render, `fromService property: host` '
             + 'yields a PRIVATE network name, which free web services cannot reach. '

@@ -89,15 +89,18 @@ export default function AppShell() {
             scores are systematically off for South Asian thresholds. Screening estimates
             only.
           </Disclaimer>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={signOut}
-            className="self-start sm:hidden"
-          >
-            <LogOut className="size-4" aria-hidden />
-            Sign out
-          </Button>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <a href="/privacy" className="text-xs text-secondary hover:text-primary hover:underline">
+              Privacy
+            </a>
+            <a href="/terms" className="text-xs text-secondary hover:text-primary hover:underline">
+              Terms
+            </a>
+            <Button variant="ghost" size="sm" onClick={signOut} className="sm:hidden">
+              <LogOut className="size-4" aria-hidden />
+              Sign out
+            </Button>
+          </div>
         </div>
       </footer>
     </div>

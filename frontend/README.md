@@ -14,8 +14,8 @@ npm run smoke    # renders every screen through react-dom/server
 | Route | What it does |
 |---|---|
 | `/` | Overview. Headline metrics, what the model is built on, and the limitations, stated on the page rather than buried |
-| `/signin` | Sign in and sign up against Passport **session cookies** |
-| `/onboarding` | Profile, then wearable history (device export or seeded demo) |
+| `/signin` | Sign in with Google, or email and password, against Passport **session cookies** |
+| `/onboarding` | Profile, then wearable history — connect Google Health, import a device export, or seed a demo |
 | `/dashboard` | Four risk cards, the trajectory chart, estimated biomarkers, and what the assessment was computed from |
 | `/log` | Meal logging against the Indian food database, and measured vitals |
 | `/assistant` | Server-proxied Gemini chat, with grounding shown per reply |
@@ -37,6 +37,50 @@ These are structural, not conventions:
   server behind `POST /api/chat`.
 - **It shows provenance.** Every score displays where it came from and what it
   was computed from, because the API makes both required fields.
+
+## Google
+
+Two separate features behind one OAuth client, with very different reach:
+
+- **Sign in with Google** uses only `openid email profile` — non-sensitive
+  scopes, no review, works for everyone. The button is rendered by Google
+  Identity Services; the ID token it returns is verified server-side against
+  Google's public keys, so nothing about the signed-in user is taken from the
+  browser's word. Set `VITE_GOOGLE_CLIENT_ID` to enable it; leave it unset and
+  the button does not render and the password form still works.
+- **Connect Google Health** reads real wearable data. Every Health API scope is
+  Restricted, so it works for accounts added as test users in the Google Cloud
+  console until the app passes OAuth verification. The onboarding card says so
+  before you click it rather than leaving you to discover it at Google's consent
+  screen.
+
+A client ID is not a secret — Google's own documentation puts it in page source.
+The client *secret* exists only on the server.
+
+## Cold starts
+
+Both backend services spin down after fifteen minutes idle on their free tier,
+and the inference container needs the best part of a minute to come back — so
+the first visit after a quiet spell used to land on "the model is not
+answering", which describes a working system as a broken one.
+
+Two things handle it, and the detail that makes them work is the timeout:
+
+- **`GET /api/inference/health?wake=1`** holds the request open for the whole
+  cold-start window. Without `wake=1` the same endpoint is a 5-second monitoring
+  probe — and a spun-down container measured **34.9 seconds** just to answer, so
+  the probe aborted seven times too early and reported the service unreachable
+  at exactly the moment it was booting. It woke nothing.
+- The landing and sign-in screens fire that wake call on mount, so the container
+  starts while the visitor reads and types. On a 503 the dashboard runs up to
+  **three wake-and-retry rounds**, showing elapsed seconds and the attempt
+  number. If a wake call gives up, the next round waits again rather than
+  spending an assessment attempt on a container that has not finished starting.
+
+Bounded at three rounds, not an endless poll: a service that will not start is a
+real fault, and hiding it behind an indefinite spinner is the other failure
+mode. Both paths were verified with a stubbed slow container — first wake gives
+up, second succeeds, dashboard loads with no error shown.
 
 ## Configuration
 

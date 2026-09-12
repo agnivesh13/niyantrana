@@ -42,10 +42,40 @@ const config = {
 
   geminiApiKey: process.env.GEMINI_API_KEY,
 
-  fitbit: {
-    clientId: process.env.FITBIT_CLIENT_ID,
-    clientSecret: process.env.FITBIT_CLIENT_SECRET,
-    redirectUri: process.env.FITBIT_REDIRECT_URI,
+  /**
+   * Google identity and the Google Health API.
+   *
+   * Replaces the Fitbit block that was here. Fitbit's Web API is turned down in
+   * September 2026 and the Google Health API is its declared successor, so a
+   * Fitbit OAuth seam was config for something that cannot be registered for.
+   * Fitbit remains a supported *import* source -- a file export needs no API.
+   *
+   * `clientId` is not a secret. It is sent to the browser by design, which is
+   * why the frontend has its own VITE_GOOGLE_CLIENT_ID. The secret is only ever
+   * used here, server-side, for the authorization-code exchange.
+   */
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    // Where Google returns the user after they grant health access. Must match
+    // an Authorised redirect URI on the OAuth client, exactly.
+    healthRedirectUri: process.env.GOOGLE_HEALTH_REDIRECT_URI
+      || 'http://localhost:8080/auth/google/health/callback',
+    // Where to send the browser once tokens are stored.
+    healthReturnUrl: process.env.GOOGLE_HEALTH_RETURN_URL,
+    /**
+     * Read-only Health API scopes.
+     *
+     * Overridable because the published scope-to-data-type mapping does not
+     * state which scope covers daily resting heart rate and HRV, and requesting
+     * a scope you do not need is exactly what an OAuth review rejects. Narrow
+     * this once the consent screen shows what each one grants.
+     */
+    healthScopes: (process.env.GOOGLE_HEALTH_SCOPES
+      || ['https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly',
+        'https://www.googleapis.com/auth/googlehealth.sleep.readonly',
+        'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly',
+      ].join(',')).split(',').map((scope) => scope.trim()).filter(Boolean),
   },
 
   trustProxy: bool(process.env.TRUST_PROXY, isProduction),

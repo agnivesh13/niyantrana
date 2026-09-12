@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Terms of Service — Niyantrana</title>
+<meta name="description" content="The terms on which Niyantrana, a metabolic-health screening tool, is provided." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231a73e8'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-size='20' font-weight='700' fill='white' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E" />
+<!-- Static HTML for the same reason as the privacy policy: the verification
+     crawler must be able to read this without executing JavaScript. -->
+<style>
+  :root {
+    --ink: #202124; --ink-2: #5f6368; --ink-3: #80868b;
+    --line: #e8eaed; --ground: #f8f9fa; --accent: #1a73e8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 16px/1.65 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  header { background: #fff; border-bottom: 1px solid var(--line); }
+  .bar, main { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
+  .bar { display: flex; align-items: center; gap: .6rem; height: 4rem; }
+  .mark {
+    display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
+    border-radius: .5rem; background: var(--accent); color: #fff;
+    font-weight: 700; font-size: .9rem;
+  }
+  .mark + span { font-weight: 600; font-size: 1.05rem; letter-spacing: -.01em; }
+  a { color: var(--accent); }
+  main { padding-bottom: 4rem; }
+  h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -.02em; margin: 2.5rem 0 .5rem; }
+  h2 { font-size: 1.2rem; margin: 2.5rem 0 .5rem; letter-spacing: -.01em; }
+  p, li { color: var(--ink-2); }
+  li { margin: .3rem 0; }
+  .updated { color: var(--ink-3); font-size: .875rem; margin-top: 0; }
+  .callout {
+    background: #fff; border: 1px solid var(--line); border-radius: .75rem;
+    padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  footer { border-top: 1px solid var(--line); background: #fff; }
+  footer .bar { height: auto; padding: 1.5rem 1.25rem; display: block; color: var(--ink-3); font-size: .875rem; }
+  footer a { margin-right: 1rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <span class="mark">N</span><span>Niyantrana</span>
+  </div>
+</header>
+
+<main>
+  <h1>Terms of Service</h1>
+  <p class="updated">Last updated 13 September 2026</p>
+
+  <p>
+    Niyantrana is a metabolic-health screening tool provided free of charge by an
+    individual developer, Swami Agnivesh, as a personal and educational project. By
+    creating an account you agree to these terms.
+  </p>
+
+  <div class="callout">
+    <strong>This is not medical advice and not a medical device.</strong>
+    Niyantrana estimates risk; it does not diagnose, treat, or rule out any condition. Do
+    not use it to make a decision about medication, treatment, or whether to seek care. If
+    you have symptoms or a concern, see a clinician. In an emergency, contact emergency
+    services.
+  </div>
+
+  <h2>1. What the service does</h2>
+  <p>
+    It estimates the likelihood of four metabolic conditions — fatty liver, raised blood
+    pressure, raised blood sugar and type-2 diabetes — from measurements and daily habits
+    you record, and shows how those estimates move over time. Every number is labelled with
+    where it came from, and the app reports an error rather than a guess when it cannot
+    produce a real estimate.
+  </p>
+
+  <h2>2. What it does not do</h2>
+  <ul>
+    <li>It does not diagnose. A high score is a prompt to get tested, not a finding.</li>
+    <li>It does not replace a blood test, a blood-pressure cuff, or a clinician.</li>
+    <li>It is not monitored. Nobody is watching your scores, and nothing in this app will
+      alert a doctor or an emergency service on your behalf.</li>
+  </ul>
+
+  <h2>3. Accuracy, stated honestly</h2>
+  <p>
+    The risk models were trained on NHANES 2013–2018 and evaluated on a held-out cycle. On
+    that holdout they reach AUROC 0.80 for hypertension, 0.80 for raised blood sugar, 0.80
+    for type-2 diabetes and 0.96 for fatty liver — and that last figure is close to a
+    tautology, because BMI and waist circumference alone reach 0.955.
+  </p>
+  <p>
+    Two limitations follow from that and apply to every score you see. The models are
+    calibrated on a United States population, so they are systematically off for South
+    Asian thresholds; and high predicted probabilities are overconfident. Treat the output
+    as a rough signal, not a measurement.
+  </p>
+
+  <h2>4. Your account</h2>
+  <ul>
+    <li>You are responsible for the accuracy of what you enter. Wrong measurements produce
+      wrong estimates.</li>
+    <li>Keep your sign-in credentials to yourself, and do not share an account — the risk
+      history belongs to one person.</li>
+    <li>You must be 18 or over. The models were fitted on adults.</li>
+    <li>Do not use the service to store or process anyone else's health data without their
+      knowledge.</li>
+  </ul>
+
+  <h2>5. Your data</h2>
+  <p>
+    What is collected, who it reaches, and how to delete it are set out in the
+    <a href="/privacy">Privacy Policy</a>, which forms part of these terms. You can
+    disconnect Google Health at any time, and you can have your account and all of its
+    records deleted by emailing
+    <a href="mailto:agniveshshaga@gmail.com">agniveshshaga@gmail.com</a>.
+  </p>
+
+  <h2>6. Availability</h2>
+  <p>
+    The service runs on free hosting tiers and is provided as-is, with no uptime
+    commitment. It may be slow after a period of inactivity, may be unavailable, and may be
+    discontinued. Keep your own copy of anything you would not want to lose.
+  </p>
+
+  <h2>7. No warranty, and limits on liability</h2>
+  <p>
+    The service is provided "as is", without warranties of any kind, express or implied,
+    including fitness for a particular purpose. To the fullest extent permitted by law, the
+    developer is not liable for any loss or harm arising from use of the service or from
+    reliance on its output — including any decision about your health made on the basis of
+    a score it produced. Nothing in these terms limits liability that cannot be limited by
+    law.
+  </p>
+
+  <h2>8. Acceptable use</h2>
+  <p>
+    Do not attempt to break into, overload, scrape, or reverse-engineer the service or its
+    infrastructure, and do not use it to build a competing dataset from other people's
+    data.
+  </p>
+
+  <h2>9. Changes and termination</h2>
+  <p>
+    These terms may change; the date above changes with them, and continued use after a
+    change means you accept it. You may close your account at any time by requesting
+    deletion. The developer may suspend or end an account that breaches these terms, or
+    shut the service down entirely.
+  </p>
+
+  <h2>10. Governing law</h2>
+  <p>
+    These terms are governed by the laws of India, and the courts of Hyderabad, Telangana
+    have jurisdiction.
+  </p>
+
+  <h2>11. Contact</h2>
+  <p>
+    Swami Agnivesh —
+    <a href="mailto:agniveshshaga@gmail.com">agniveshshaga@gmail.com</a>
+  </p>
+</main>
+
+<footer>
+  <div class="bar">
+    <a href="/">Home</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/terms">Terms of Service</a>
+    <p style="margin:.75rem 0 0">
+      A screening estimate, not a diagnosis. Niyantrana is not a medical device.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

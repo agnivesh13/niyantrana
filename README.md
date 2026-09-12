@@ -138,7 +138,7 @@ Measured: importing TensorFlow costs **358 MB RSS**; onnxruntime costs 33 MB; th
 |---|---|
 | ML | Python 3.13, scikit-learn `HistGradientBoosting`, SHAP |
 | Data | NHANES 2013–2018 (CDC, public domain), Anuvaad INDB 2024.11 |
-| API | Node 22, Express 5, Mongoose, Passport (session cookies) |
+| API | Node 22, Express 5, Mongoose, Passport (session cookies), Google Identity Services for sign-in |
 | Inference | FastAPI, Pydantic, uvicorn |
 | Tests | pytest (102) + `node:test` (83) — **185 total, zero test-framework dependencies on the Node side** |
 | Deploy | Render × 2 + MongoDB Atlas M0, `render.yaml` blueprint |
@@ -206,17 +206,19 @@ curl -s -b j -X POST $API/api/predict       -H 'Content-Type: application/json' 
 
 ## Wearable data
 
-Every consumer wearable API a solo developer could register for has closed. Verified September 2026:
+Three paths in, because the API landscape moved twice while this was being built. Verified September 2026:
 
 | Provider | Status |
 |---|---|
+| Google Health API | ✅ **implemented** — the live successor to both below. Every scope is Restricted, so it works for accounts added as console test users until the app passes OAuth verification |
 | Google Fit | New signups closed 1 May 2024; APIs deprecating |
 | Fitbit Web API | New signups closed 1 May 2024; **sunset September 2026** |
-| Google Health API | Replacement for both; every scope Restricted → privacy/security review |
 | Garmin | Requires a legal entity; rejects personal-use applications |
-| Withings, Oura | ✅ still open to individual developers |
+| Withings, Oura | Still open to individual developers; not implemented |
 
-So **file import is the primary path**, not a fallback. `POST /api/wearable/import` accepts CSV, a JSON array, or the per-metric shape Google Takeout produces, normalising ~40 field aliases across Fitbit / Apple Health / Oura / Withings. It needs no device, and cannot be deprecated out from under the project.
+**Google Health** is the first-party route: `POST /api/wearable/google-health/sync` reads steps and active minutes from the daily roll-up endpoints, assembles sleep hours and efficiency from session stages, and lists daily resting heart rate and HRV — then merges them into the same wearable history everything else uses. Every sync returns a per-feature report naming the field path it resolved and the days it covered, because the published reference does not name every value field; a feature it cannot find stays **absent rather than zero**, since a zero would read to the model as "did not move".
+
+**File import stays the primary path**, not a fallback. `POST /api/wearable/import` accepts CSV, a JSON array, or the per-metric shape Google Takeout produces, normalising ~40 field aliases across Fitbit / Apple Health / Oura / Withings. It needs no device, and cannot be deprecated out from under the project.
 
 `POST /api/wearable/demo` seeds 90 days of correlated, deterministic history — every row stored with `source: "demo"`, so seeded data is distinguishable at the record level rather than by a banner.
 
@@ -236,7 +238,7 @@ So **file import is the primary path**, not a fallback. `POST /api/wearable/impo
 ## What I'd do next
 
 - Recalibrate on **LASI** (~72,000 Indians with HbA1c and BP) for India-appropriate thresholds
-- Add **Withings or Oura** OAuth behind the existing provider seam
+- Pass Google OAuth verification, so anyone (not only console test users) can connect their own Google Health data
 - Quantify the self-report vs sensor gap using NHANES `PAXDAY` accelerometry, which is paired within-person with the questionnaire
 - Host the web client (Cloudflare Pages) and smoke-test it from a phone on mobile data
 

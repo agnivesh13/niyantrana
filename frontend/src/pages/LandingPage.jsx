@@ -10,9 +10,11 @@
  * A portfolio landing page that overclaims is worse than a plain one: the first
  * question in an interview is always "how did you validate this?".
  */
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Database, LineChart, ShieldCheck, Workflow } from 'lucide-react';
 
+import apiService from '../services/apiService.jsx';
 import { Button, Card, Disclaimer } from '../ui/primitives.jsx';
 import Wordmark from '../components/Wordmark.jsx';
 
@@ -45,8 +47,8 @@ const PILLARS = [
   {
     icon: Workflow,
     title: 'Indian food database',
-    body: 'Macros resolve server-side against Anuvaad INDB 2024.11 — 1,014 Indian foods '
-      + 'so meal logging does not require translating a thali into a US database.',
+    body: 'Macros resolve server-side against Anuvaad INDB 2024.11 — 1,014 Indian '
+      + 'foods — so meal logging does not require translating a thali into a US database.',
   },
 ];
 
@@ -61,6 +63,20 @@ function Metric({ label, value, note }) {
 }
 
 export default function LandingPage() {
+  /**
+   * Wake the services while the visitor reads.
+   *
+   * Both free-tier services spin down after fifteen minutes idle, and the
+   * inference container needs the best part of a minute to come back. Someone
+   * arriving here will spend at least that long reading and signing in, so
+   * starting the clock now is the difference between a dashboard that loads and
+   * a cold-start wait at the worst possible moment.
+   *
+   * Fire-and-forget by design: it fetches no data, and a failure changes
+   * nothing — the dashboard handles a sleeping service on its own.
+   */
+  useEffect(() => { apiService.risk.wakeInference().catch(() => null); }, []);
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-line bg-surface">
@@ -148,6 +164,42 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Why the app asks for data, in the words Google's homepage requirements
+          ask for: what is requested, what it is used for, and how to withdraw
+          it. Written for a person, but it is also the disclosure a reviewer
+          looks for on a consent-screen homepage. */}
+      <section className="border-t border-line bg-surface">
+        <div className="mx-auto max-w-content px-4 py-16 sm:px-6">
+          <h2 className="text-2xl font-semibold text-primary">Why Niyantrana asks for data</h2>
+          <div className="mt-6 grid gap-8 sm:grid-cols-2">
+            <div>
+              <h3 className="font-medium text-primary">Signing in with Google</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-secondary">
+                Reads your email address and Google account identifier, and nothing else —
+                not your name, not your profile picture. It exists so your records stay
+                attached to you and separate from everyone else's.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-primary">Connecting Google Health</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-secondary">
+                Optional, read-only, and limited to six values per day: steps, active
+                minutes, sleep duration, sleep efficiency, resting heart rate and
+                heart-rate variability. They are the inputs of the risk models, and they
+                are used for nothing else — no advertising, no sale, no human reading them.
+                Disconnect in the app at any time.
+              </p>
+            </div>
+          </div>
+          <p className="mt-6 text-sm text-secondary">
+            The full detail is in the{' '}
+            <a href="/privacy" className="font-medium text-accent hover:underline">
+              privacy policy
+            </a>, including how to have everything deleted.
+          </p>
+        </div>
+      </section>
+
       {/* The limitation section, on the landing page rather than buried. */}
       <section className="mx-auto w-full max-w-content px-4 py-16 sm:px-6">
         <Card className="p-6 sm:p-8">
@@ -183,6 +235,20 @@ export default function LandingPage() {
       <footer className="border-t border-line bg-surface">
         <div className="mx-auto flex max-w-content flex-col gap-4 px-4 py-8 sm:px-6">
           <Wordmark to={null} subdued />
+          <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm" aria-label="Policies">
+            <a href="/privacy" className="text-secondary hover:text-primary hover:underline">
+              Privacy Policy
+            </a>
+            <a href="/terms" className="text-secondary hover:text-primary hover:underline">
+              Terms of Service
+            </a>
+            <a
+              href="mailto:agniveshshaga@gmail.com"
+              className="text-secondary hover:text-primary hover:underline"
+            >
+              Contact
+            </a>
+          </nav>
           <Disclaimer className="max-w-3xl" />
         </div>
       </footer>

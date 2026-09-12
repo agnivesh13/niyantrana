@@ -165,6 +165,39 @@ npm run preview     # http://localhost:4173
 
 ---
 
+## 4c. Google sign-in and Google Health (optional)
+
+Both are driven by one OAuth client in the same Google Cloud project. Console
+steps are in
+[MANUAL_CHECKLIST.md](MANUAL_CHECKLIST.md#google-sign-in-and-google-health--console-setup-is-yours);
+what production needs is:
+
+| Service | Variable | Value |
+|---|---|---|
+| `niyantrana-api` | `GOOGLE_CLIENT_ID` | the OAuth client ID |
+| `niyantrana-api` | `GOOGLE_CLIENT_SECRET` | the OAuth client secret |
+| `niyantrana-api` | `GOOGLE_HEALTH_REDIRECT_URI` | `https://niyantrana-api.onrender.com/auth/google/health/callback` |
+| `niyantrana-api` | `GOOGLE_HEALTH_RETURN_URL` | `https://<project>.pages.dev/onboarding` |
+| Cloudflare Pages | `VITE_GOOGLE_CLIENT_ID` | the same client ID |
+
+Leave them unset and both features disappear cleanly: no Google button, no
+connect card, and the password and import paths work exactly as before.
+
+Two failure modes worth recognising:
+
+**`redirect_uri_mismatch` at Google.** `GOOGLE_HEALTH_REDIRECT_URI` and the
+Authorised redirect URI on the client must be byte-identical. The value points
+at the **API** host, not the frontend — Google is calling the server, not the
+browser app.
+
+**The callback returns 401.** The consent callback is an authenticated route
+reached by a top-level browser navigation from Google, so it needs the session
+cookie to travel cross-site. If it 401s, that cookie is not arriving: check
+`TRUST_PROXY=true` on the API and that the client is served over HTTPS, since
+`SameSite=None` is only honoured with `Secure`.
+
+---
+
 ## 5. Things that will bite you
 
 **Login succeeds but the user is immediately logged out.**

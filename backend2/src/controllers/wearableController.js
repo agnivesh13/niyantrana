@@ -7,8 +7,12 @@
  * project -- and it needs no device, which matters when the reviewer of a
  * portfolio project owns none.
  */
-import { ValidationError } from '../domain/errors.js';
+import crypto from 'node:crypto';
+
+import config from '../config/env.js';
+import { UnauthorizedError, ValidationError } from '../domain/errors.js';
 import demoDataService from '../services/demoDataService.js';
+import googleHealthService from '../services/googleHealthService.js';
 import userRepository from '../repositories/userRepository.js';
 import WearableImportService, { FIELD_ALIASES } from '../services/wearableImportService.js';
 
@@ -48,7 +52,8 @@ export async function loadDemoData(req, res) {
 export function importFormats(_req, res) {
   res.json({
     accepts: ['text/csv', 'application/json'],
-    sources: ['fitbit', 'apple_health', 'oura', 'withings', 'google_takeout', 'import', 'manual'],
+    sources: ['google_health', 'fitbit', 'apple_health', 'oura', 'withings',
+      'google_takeout', 'import', 'manual'],
     canonicalFields: Object.keys(FIELD_ALIASES).filter((f) => f !== 'sleep_minutes'),
     fieldAliases: FIELD_ALIASES,
     note: 'Send CSV text, a JSON array of daily records, or a per-metric object '
@@ -56,4 +61,61 @@ export function importFormats(_req, res) {
       + 'Column names are matched against a wide alias list, so most exports '
       + 'import without transformation.',
   });
+}
+
+// --- Google Health ----------------------------------------------------------
+
+export function googleHealthStatus(req, res) {
+  return googleHealthService.status(req.user.id).then((status) => res.json(status));
+}
+
+/**
+ * Begin the consent flow.
+ *
+ * `state` is a random value held in the session and checked on return. Without
+ * it, a third party could hand the user a callback URL carrying their own
+ * authorization code and attach their health account to this user.
+ */
+export async function googleHealthStart(req, res) {
+  if (!googleHealthService.configured) {
+    throw new ValidationError(
+      'Google Health is not configured on this server (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
+    );
+  }
+  const state = crypto.randomBytes(32).toString('base64url');
+  req.session.googleHealthState = state;
+  res.redirect(googleHealthService.authorizationUrl(state));
+}
+
+/**
+ * Consent callback.
+ *
+ * Redirects back to the app with the outcome in the query string rather than
+ * rendering here: this endpoint is reached by a browser navigation from Google,
+ * not by the client, so JSON would leave the user looking at raw output.
+ */
+export async function googleHealthCallback(req, res) {
+  const expected = req.session.googleHealthState;
+  delete req.session.googleHealthState;
+
+  const returnTo = config.google.healthReturnUrl || `${config.corsOrigins[0]}/onboarding`;
+  const back = (params) => res.redirect(`${returnTo}?${new URLSearchParams(params)}`);
+
+  if (req.query.error) return back({ google_health: 'denied', reason: req.query.error });
+  if (!req.query.state || req.query.state !== expected) {
+    throw new UnauthorizedError('That Google callback did not match this session');
+  }
+  if (!req.query.code) return back({ google_health: 'denied', reason: 'no_code' });
+
+  const result = await googleHealthService.connect(req.user.id, req.query.code);
+  return back({ google_health: 'connected', scopes: result.scopes.length });
+}
+
+export async function googleHealthSync(req, res) {
+  const days = Number(req.body?.days) || undefined;
+  res.json(await googleHealthService.sync(req.user.id, { days }));
+}
+
+export async function googleHealthDisconnect(req, res) {
+  res.json(await googleHealthService.disconnect(req.user.id));
 }
