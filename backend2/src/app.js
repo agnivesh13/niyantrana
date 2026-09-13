@@ -75,8 +75,18 @@ export function createApp() {
     res.status(database === 'connected' ? 200 : 503).json({
       status: database === 'connected' ? 'ok' : 'degraded',
       database,
-      // Chat being unconfigured is not a failure: every other endpoint works.
+      // Optional integrations report their own configuration state. None of
+      // them being configured is a degraded feature set, not a failure, so the
+      // status stays "ok" -- but which ones are live has to be visible here.
+      //
+      // Added after "Google sign-in is not configured on this server" reached a
+      // user in the browser: the server knew exactly what was missing, and the
+      // only way to find that out was to POST a junk credential at /auth/google
+      // and read the error. A misconfiguration you can only discover by
+      // triggering it is a misconfiguration you find out about from your users.
       chat_enabled: chatService.isConfigured,
+      google_sign_in: Boolean(config.google.clientId),
+      google_health: Boolean(config.google.clientId && config.google.clientSecret),
       timestamp: new Date().toISOString(),
     });
   });

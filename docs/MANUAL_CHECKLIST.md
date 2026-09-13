@@ -230,10 +230,28 @@ Frontend (`.env`, or the Pages build environment):
 VITE_GOOGLE_CLIENT_ID=<the same client id>
 ```
 
-The client ID is public by design; the **secret** goes only in the backend. If
-`VITE_GOOGLE_CLIENT_ID` is unset the Google button simply does not render, and
-the password form still works — so a half-configured deployment degrades
-instead of breaking.
+The client ID is public by design; the **secret** goes only in the backend.
+
+**Both sides are needed, and they fail differently — this is the failure most
+likely to bite you:**
+
+| Missing | Symptom |
+|---|---|
+| `VITE_GOOGLE_CLIENT_ID` on Pages | No Google button at all. The component compiles out of the bundle entirely, so the page looks like Google sign-in was never built |
+| `GOOGLE_CLIENT_ID` on Render | The button appears and works, then the server rejects the credential with **"Google sign-in is not configured on this server"** |
+
+Both were hit in that order. Setting the variables is enough on its own —
+Render restarts the service automatically, and no code change is required.
+
+Check it without triggering it:
+
+```bash
+curl -s https://niyantrana-api.onrender.com/health
+# {"status":"ok", ..., "google_sign_in":true, "google_health":true}
+```
+
+`/health` reports both flags, so a missing credential is visible from a health
+check instead of from a user hitting the error in the browser.
 
 ### ☐ 3. Put some data in the account — ~5 minutes
 

@@ -1,8 +1,10 @@
 # Render Blueprint: both backend services.
 #
 # Deploy with: Render dashboard -> New -> Blueprint -> point at this repo.
-# See DEPLOYMENT.md for the full walkthrough, including the two values you must
-# paste in yourself (MONGO_URI and CORS_ORIGIN).
+# See DEPLOYMENT.md for the full walkthrough, including the values marked
+# `sync: false` below, which Render asks you for rather than reading from here:
+# MONGO_URI, CORS_ORIGIN, and -- if you want Google sign-in -- GOOGLE_CLIENT_ID
+# and GOOGLE_CLIENT_SECRET.
 #
 # Free plan notes that shape this file:
 #   * A free instance spins down after 15 minutes idle and takes ~1 minute to
@@ -103,3 +105,41 @@ services:
       # from new users months before its published shutdown date.
       #
       # Add it by hand in the Render dashboard only to force a specific model.
+
+      # --- Google sign-in and the Google Health API ---------------------------
+      #
+      # Both features come from ONE OAuth client. Declared here so a fresh
+      # blueprint deploy asks for them instead of failing at runtime -- which is
+      # how this was found the first time: the button rendered, the browser got
+      # a credential, and the server answered "Google sign-in is not configured
+      # on this server" because only the frontend had been given the ID.
+      #
+      # `sync: false` keeps both out of git. The client ID is not secret (it is
+      # sent to every browser, and the frontend has its own copy in
+      # VITE_GOOGLE_CLIENT_ID), but it is per-deployment, so it is entered the
+      # same way. The SECRET is genuinely secret and is used only server-side,
+      # for the authorization-code exchange.
+      #
+      # Leave both unset and the features disable themselves cleanly: no Google
+      # button, no connect card, password sign-in and file import unaffected.
+      # /health reports `google_sign_in` and `google_health` so you can see which
+      # state a deployment is in without triggering an error to find out.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Deterministic, because the blueprint fixes the service name -- same
+      # reasoning as ML_SERVICE_URL above. It must match an Authorised redirect
+      # URI on the OAuth client BYTE FOR BYTE, so pinning it here removes the
+      # most common cause of `redirect_uri_mismatch`.
+      - key: GOOGLE_HEALTH_REDIRECT_URI
+        value: https://niyantrana-api.onrender.com/auth/google/health/callback
+      # GOOGLE_HEALTH_RETURN_URL is deliberately NOT declared.
+      #
+      # It defaults to the first CORS_ORIGIN plus /onboarding, which is already
+      # the frontend you just configured. Declaring it would make Render prompt
+      # for a value that is correct by default. Set it by hand only if the app
+      # that starts the connect flow lives somewhere other than CORS_ORIGIN.
+      #
+      # GOOGLE_HEALTH_SCOPES is also undeclared: unset requests the three
+      # read-only Health scopes the code needs. Set it only to narrow them.
