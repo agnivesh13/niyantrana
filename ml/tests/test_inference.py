@@ -113,9 +113,38 @@ def test_rejects_wrong_window_length(count):
             "heart_rate_variability": 50}] * count)
 
 
-def test_rejects_missing_wearable_field():
-    with pytest.raises(ValidationError, match="daily_steps"):
-        WearableWindow.from_records([{"active_minutes": 30}] * 14)
+def test_accepts_a_partial_wearable_day():
+    """A day may carry only some measurements, and that must not be an error.
+
+    This replaces a test that asserted the opposite. Requiring all six fields
+    rejected real data: a Google Health account fed by Samsung Health supplies
+    steps and sleep and no active minutes, so a genuine 14-day history came back
+    as "Wearable day missing active_minutes". The importers deliberately leave a
+    field absent rather than write a zero -- a zero reads to the model as "did
+    not move" -- so absence has to be representable the whole way through.
+    """
+    window = WearableWindow.from_records([{"daily_steps": 6000, "sleep_hours": 7.0}] * 14)
+
+    assert window.mean_daily_steps == 6000
+    assert window.mean_sleep_hours == 7.0
+    # Unknown, not zero: the estimators are gradient-boosted trees and take NaN.
+    assert window.mvpa_minutes_week is None
+    assert window.sedentary_minutes_day is None
+
+
+def test_averages_only_the_days_that_carry_a_measurement():
+    """A gap mid-window must not drag the mean toward zero."""
+    days = [{"daily_steps": 6000, "resting_heart_rate": 60} for _ in range(7)]
+    days += [{"daily_steps": 6000} for _ in range(7)]
+
+    window = WearableWindow.from_records(days)
+    # 60, not 30: seven days of data averaged over seven days.
+    assert window._mean("resting_heart_rate") == 60
+
+
+def test_a_window_with_no_measurements_at_all_reports_none():
+    window = WearableWindow.from_records([{"daily_steps": 5000}] * 14)
+    assert window._mean("heart_rate_variability") is None
 
 
 def test_rejects_implausible_profile():

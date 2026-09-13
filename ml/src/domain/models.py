@@ -226,14 +226,30 @@ class UserProfile:
 
 @dataclass(frozen=True)
 class WearableDay:
-    """One day of wearable measurements."""
+    """One day of wearable measurements.
 
-    daily_steps: float
-    active_minutes: float
-    sleep_hours: float
-    sleep_quality_score: float
-    resting_heart_rate: float
-    heart_rate_variability: float
+    Every field is optional, and that is load-bearing rather than lenient.
+
+    Real exports are partial. A Google Health account fed by Samsung Health
+    supplies steps and sleep but no active minutes, because the daily-derived
+    records Fitbit's backend produces do not exist for it; a phone with no watch
+    has no heart rate at all. The importers record what they found and leave the
+    rest absent, on the principle that a fabricated zero reads to the model as
+    "did not move" or "did not sleep".
+
+    Requiring all six contradicted that: a genuine 14-day history was rejected
+    with "Wearable day missing active_minutes", and the honest importer produced
+    exactly the payload the service refused. The estimators are gradient-boosted
+    trees that handle NaN natively, which is what makes absence representable
+    all the way through instead of only at the edge.
+    """
+
+    daily_steps: float | None
+    active_minutes: float | None
+    sleep_hours: float | None
+    sleep_quality_score: float | None
+    resting_heart_rate: float | None
+    heart_rate_variability: float | None
 
     @classmethod
     def from_dict(cls, data: dict) -> "WearableDay":
@@ -241,7 +257,7 @@ class WearableDay:
             for name in names:
                 if data.get(name) is not None:
                     return float(data[name])
-            raise ValidationError(f"Wearable day missing {names[0]}")
+            return None
 
         return cls(
             daily_steps=pick("daily_steps", "steps"),
@@ -278,19 +294,26 @@ class WearableWindow:
             raise ValidationError("Wearable window must be a list of daily records")
         return cls(tuple(WearableDay.from_dict(r) for r in records))
 
-    def _mean(self, attr: str) -> float:
-        return sum(getattr(d, attr) for d in self.days) / len(self.days)
+    def _mean(self, attr: str) -> float | None:
+        """Mean over the days that carry this measurement.
+
+        None when no day does, which the feature bridge turns into NaN. A window
+        where only some days have heart-rate data averages the days that do
+        rather than counting the gaps as zero.
+        """
+        values = [getattr(d, attr) for d in self.days if getattr(d, attr) is not None]
+        return sum(values) / len(values) if values else None
 
     @property
-    def mean_sleep_hours(self) -> float:
+    def mean_sleep_hours(self) -> float | None:
         return self._mean("sleep_hours")
 
     @property
-    def mean_daily_steps(self) -> float:
+    def mean_daily_steps(self) -> float | None:
         return self._mean("daily_steps")
 
     @property
-    def mvpa_minutes_week(self) -> float:
+    def mvpa_minutes_week(self) -> float | None:
         """Weekly moderate-to-vigorous minutes, scaled from the window mean.
 
         This is the feature bridge: NHANES measures weekly activity minutes via
@@ -298,12 +321,23 @@ class WearableWindow:
         different instrument -- which is what lets a model trained on NHANES be
         served on wearable input.
         """
-        return self._mean("active_minutes") * 7.0
+        mean = self._mean("active_minutes")
+        return mean * 7.0 if mean is not None else None
 
     @property
-    def sedentary_minutes_day(self) -> float:
-        """Waking minutes not spent active."""
-        return max(0.0, (24.0 - self.mean_sleep_hours) * 60.0 - self._mean("active_minutes"))
+    def sedentary_minutes_day(self) -> float | None:
+        """Waking minutes not spent active.
+
+        Needs both halves: without sleep there is no waking day to subtract
+        from, and without active minutes there is nothing to subtract. Either
+        missing makes the quantity unknown rather than zero -- and zero
+        sedentary minutes would be a remarkable claim to feed a model.
+        """
+        sleep = self.mean_sleep_hours
+        active = self._mean("active_minutes")
+        if sleep is None or active is None:
+            return None
+        return max(0.0, (24.0 - sleep) * 60.0 - active)
 
 
 @dataclass(frozen=True)

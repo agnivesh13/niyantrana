@@ -5,7 +5,7 @@
  * handlers live in controllers and rules live in services. asyncHandler removes
  * the try/catch that was copy-pasted into every v1 handler.
  */
-import { Router } from 'express';
+import express, { Router } from 'express';
 
 import * as authController from '../controllers/authController.js';
 import * as logController from '../controllers/logController.js';
@@ -65,6 +65,14 @@ router.post('/api/logs/activity', authenticate, asyncHandler(logController.logAc
 router.get('/api/wearable/formats', wearableController.importFormats);
 router.post('/api/wearable/import', authenticate, asyncHandler(wearableController.importWearableData));
 router.post('/api/wearable/demo', authenticate, asyncHandler(wearableController.loadDemoData));
+
+// A larger body limit than the global 4mb, and only here: a Samsung export's
+// heart-rate CSV alone is 10 MB before the client trims it to the requested
+// window. Raising the global limit to suit one route would widen the surface
+// every other endpoint presents.
+router.post('/api/wearable/import/samsung', authenticate,
+  express.json({ limit: '16mb' }),
+  asyncHandler(wearableController.importSamsungHealth));
 
 router.get('/api/wearable/google-health', authenticate,
   asyncHandler(wearableController.googleHealthStatus));

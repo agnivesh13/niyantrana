@@ -17,6 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, Link as LinkIcon, Upload } from 'lucide-react';
 
 import apiService from '../services/apiService.jsx';
+import { readSamsungExport } from '../lib/samsungExport.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import {
   Alert, Button, Card, CardBody, CardDescription, CardHeader,
@@ -272,6 +273,41 @@ function WearableStep({ onDone }) {
     }
   };
 
+  /**
+   * Samsung Health hands you a zip, so the app takes a zip.
+   *
+   * Unzipped in the browser because the archive is ~23 MB of which this reads
+   * four CSVs; uploading the rest would cost the user their mobile data to send
+   * raw JSON nothing parses.
+   */
+  const importSamsung = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setBusy('samsung');
+    try {
+      const { files } = await readSamsungExport(file);
+      const response = await apiService.wearable.importSamsung(files);
+      const covered = Object.entries(response.counts ?? {})
+        .filter(([, days]) => days > 0)
+        .map(([feature, days]) => `${feature.replace(/_/g, ' ')} ${days}`)
+        .join(', ');
+      setResult(
+        `Imported ${response.imported} days from Samsung Health `
+        + `(${response.range?.from} to ${response.range?.to}). ${covered}.`
+        + (response.missing?.length
+          ? ` Not in the export: ${response.missing.join(', ').replace(/_/g, ' ')}.`
+          : ''),
+      );
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(null);
+      event.target.value = '';
+    }
+  };
+
   const importFile = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -306,7 +342,27 @@ function WearableStep({ onDone }) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded border border-line p-4">
-          <h3 className="text-sm font-medium text-primary">Import a device export</h3>
+          <h3 className="text-sm font-medium text-primary">Samsung Health</h3>
+          <p className="mt-1.5 text-xs leading-relaxed text-secondary">
+            Samsung Health &rarr; Settings &rarr; Download personal data, then drop the
+            <strong className="font-medium text-primary"> .zip</strong> in here as it came.
+            Reads steps, active minutes, sleep and resting heart rate.
+          </p>
+          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-line-strong px-3.5 py-2 text-sm text-primary hover:bg-surface-sunken">
+            <Upload className="size-4" aria-hidden />
+            {busy === 'samsung' ? 'Reading the archive...' : 'Choose the .zip'}
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              className="sr-only"
+              onChange={importSamsung}
+              disabled={busy !== null}
+            />
+          </label>
+        </div>
+
+        <div className="rounded border border-line p-4">
+          <h3 className="text-sm font-medium text-primary">Another device export</h3>
           <p className="mt-1.5 text-xs leading-relaxed text-secondary">
             CSV or JSON from Fitbit, Apple Health, Oura, Withings or Google Takeout. Column
             names are matched against a wide alias list, so most exports need no editing.

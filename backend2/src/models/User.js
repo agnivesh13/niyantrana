@@ -25,8 +25,8 @@ const watchDataSchema = new mongoose.Schema({
   // demo account must be able to tell seeded data from a real device export.
   source: {
     type: String,
-    enum: ['google_health', 'fitbit', 'apple_health', 'oura', 'withings',
-      'google_takeout', 'import', 'manual', 'demo'],
+    enum: ['google_health', 'samsung_health', 'fitbit', 'apple_health', 'oura',
+      'withings', 'google_takeout', 'import', 'manual', 'demo'],
     default: 'manual',
   },
 }, { _id: false });

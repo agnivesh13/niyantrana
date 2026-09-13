@@ -135,6 +135,15 @@ export const wearable = {
   loadDemo: (days = 90, { force = false } = {}) =>
     request('/api/wearable/demo', { method: 'POST', body: { days, force } }),
 
+  /**
+   * Import a Samsung Health export.
+   *
+   * Takes the extracted CSVs verbatim. Every value is derived server-side, so
+   * the browser's only jobs are unzipping and trimming by date.
+   */
+  importSamsung: (files) =>
+    request('/api/wearable/import/samsung', { method: 'POST', body: { files } }),
+
   // --- Google Health ---
   googleHealthStatus: () => request('/api/wearable/google-health'),
   googleHealthSync: (days = 90) =>

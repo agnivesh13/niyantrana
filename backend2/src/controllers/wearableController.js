@@ -13,6 +13,7 @@ import config from '../config/env.js';
 import { ValidationError } from '../domain/errors.js';
 import demoDataService from '../services/demoDataService.js';
 import googleHealthService from '../services/googleHealthService.js';
+import SamsungHealthImportService from '../services/samsungHealthImportService.js';
 import userRepository from '../repositories/userRepository.js';
 import WearableImportService, { FIELD_ALIASES } from '../services/wearableImportService.js';
 
@@ -163,4 +164,39 @@ export async function googleHealthSync(req, res) {
 
 export async function googleHealthDisconnect(req, res) {
   res.json(await googleHealthService.disconnect(req.user.id));
+}
+
+// --- Samsung Health ---------------------------------------------------------
+
+/**
+ * Import a Samsung Health export.
+ *
+ * The browser unzips the archive and sends only the four CSVs that matter --
+ * the export is 23 MB across 14,507 entries, almost all of it raw JSON this
+ * does not read. The files arrive verbatim: the client extracts and trims by
+ * date, and every value is derived here, so the browser never asserts a health
+ * number.
+ */
+export async function importSamsungHealth(req, res) {
+  const files = req.body?.files;
+  if (!files || typeof files !== 'object') {
+    throw new ValidationError('No Samsung Health files were supplied');
+  }
+
+  const parsed = SamsungHealthImportService.parse(files);
+  const merge = await userRepository.upsertWatchData(req.user.id, parsed.days);
+
+  res.status(201).json({
+    imported: parsed.days.length,
+    ...merge,
+    range: parsed.range,
+    source: parsed.source,
+    counts: parsed.counts,
+    missing: parsed.missing,
+    // Stated because it will differ from the figure the Samsung or Google Fit
+    // app shows: those merge across sources with their own de-duplication,
+    // which the export does not contain.
+    reconciliation: 'Days recorded by more than one device use the highest-reporting '
+      + 'device, which matches Samsung own daily aggregate row.',
+  });
 }
