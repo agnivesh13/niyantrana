@@ -73,8 +73,8 @@ Two inputs are computed server-side and cannot be asserted by the client:
 
 * **Dietary macros** are resolved against the Anuvaad food database at log time.
   A client sends a food name and a serving count; the server stores the
-  resulting macros. Previously the client sent `dietTotals` straight into the
-  model, so a browser could claim any intake it liked.
+  resulting macros. A client that could send its own `dietTotals` could claim
+  any intake it liked, and the model would treat it as observed.
 * **Measured biomarkers** come from `/api/logs/vitals`. A recorded blood
   pressure or HbA1c overrides the model estimate for that field, and
   `inputs.measuredBiomarkers` in the response names which were real.

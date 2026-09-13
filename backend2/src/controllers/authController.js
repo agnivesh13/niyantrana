@@ -2,8 +2,7 @@
  * HTTP adapters for authentication.
  *
  * Controllers are deliberately thin: parse, delegate, format. No business rule
- * lives here. Compare v1 authRoutes.js, which validated, queried, hashed and
- * persisted inside the handler.
+ * lives here, so the rules can be tested without constructing a request.
  */
 import passport from 'passport';
 
@@ -29,8 +28,10 @@ export function login(req, res, next) {
 export function logout(req, res, next) {
   req.logout((err) => {
     if (err) return next(err);
-    // v1 called req.logout() but never destroyed the session or cleared the
-    // cookie, so the session record survived logout.
+    // All three are needed: req.logout() clears the login state, destroy()
+    // removes the stored session, and clearCookie stops the browser presenting
+    // an id that no longer resolves. Skipping either of the last two leaves a
+    // session record alive after the user believes they signed out.
     return req.session.destroy((destroyErr) => {
       if (destroyErr) return next(destroyErr);
       res.clearCookie('connect.sid');

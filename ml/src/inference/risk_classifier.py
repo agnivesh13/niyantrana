@@ -1,18 +1,17 @@
 """Serving side of the calibrated risk classifiers.
 
 Returns a calibrated probability per condition, plus the screening threshold
-selected during training. Composition with the regression engine and the
-temporal model happens in the assessor (Day 4); this module only loads and
-predicts.
+selected during training. Composing those with the regression engine is the
+assessor's job; this module only loads and predicts.
 
 Design notes:
 
 * **Thresholds travel with the model.** The operating point was chosen on a
   held-out split to hit ~90% sensitivity, so hardcoding 0.5 at the call site
   would silently discard that work.
-* **Probabilities are clamped, never fabricated.** If the bundle is missing the
-  loader raises rather than degrading to a default -- the property the whole
-  v2 rewrite exists to guarantee.
+* **Probabilities are clamped, never fabricated.** A missing bundle raises
+  rather than degrading to a default, so an absent model is reported as an
+  outage instead of served as a plausible number.
 """
 from __future__ import annotations
 

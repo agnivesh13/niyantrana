@@ -605,7 +605,7 @@ ml/data/raw/anuvaad_indb_2024.11.csv render.yaml` — otherwise the build fails.
 ## Day 12 — Deploy: frontend + end-to-end ⛔ BLOCKED
 
 Blocked on the frontend rebuild you descoped, and on the accounts in
-**[docs/MANUAL_CHECKLIST.md](docs/MANUAL_CHECKLIST.md)**. `render.yaml` covers
+**[docs/SETUP.md](docs/SETUP.md)**. `render.yaml` covers
 the two backend services only.
 
 - [ ] Frontend → Cloudflare Pages with `VITE_API_BASE_URL`
@@ -628,7 +628,7 @@ HTTPS with both ends deployed.
       baseline, SHAP, the ablations, the leakage post-mortem, every negative result
 - [x] `.env.example` in **all three** services (ml and frontend were missing)
 - [x] Architecture diagrams — mermaid in `docs/ARCHITECTURE.md` and the README
-- [x] `docs/MANUAL_CHECKLIST.md` — everything only you can do
+- [x] `docs/SETUP.md` — the configuration that needs your own accounts
 - [x] `docs/PORTFOLIO_NOTES.md` — interview talking points
 
 ---
@@ -718,7 +718,7 @@ rebuild — the API itself is live and exercised.
 
 | | |
 |---|---|
-| **[docs/MANUAL_CHECKLIST.md](docs/MANUAL_CHECKLIST.md)** | Everything only you can do, ordered by priority |
+| **[docs/SETUP.md](docs/SETUP.md)** | Credentials and console settings the deployment reads |
 | [README.md](README.md) | The project as a reviewer sees it |
 | [ml/RESULTS.md](ml/RESULTS.md) | Every metric, ablation and negative result |
 | [docs/PORTFOLIO_NOTES.md](docs/PORTFOLIO_NOTES.md) | How to talk about it in an interview |

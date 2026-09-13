@@ -145,14 +145,12 @@ export class DemoDataService {
   /**
    * Seed an account with the demo profile and history.
    *
-   * **Refuses to destroy real data.** This used to overwrite the profile and
-   * replace the whole wearable history unconditionally, which meant someone who
-   * had entered their real measurements and imported a real device export lost
-   * both to a single click -- silently, with the UI describing only what was
-   * added. The surprise was visible from the outside too: because the generator
-   * is seeded with a constant and the profile is a constant, every demo-seeded
-   * account scores identically, so a user who had entered their own details saw
-   * someone else's numbers and reasonably concluded the accounts had crossed.
+   * **Refuses to destroy real data.** Seeding replaces the whole wearable
+   * history and, on an empty account, the profile too, so an unguarded call
+   * would cost someone their real measurements and imported history in one
+   * click. Because the generator is seeded with a constant and the demo profile
+   * is fixed, every demo-seeded account also scores identically -- which looks
+   * from the outside like another user data appearing in your account.
    *
    * Now: real wearable days (anything not tagged `source: 'demo'`) block the
    * seed unless `force` is passed, and an existing complete profile is left

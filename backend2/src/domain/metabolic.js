@@ -1,12 +1,11 @@
 /**
  * Metabolic formulas: the single JavaScript-side source of truth.
  *
- * Refactoring applied: Extract Class + Replace Magic Number with Symbolic Constant.
- *
- * The Mifflin-St Jeor equation was implemented twice in userRoutes.js, and the
- * Fatty Liver Index was implemented a third time in apiRoutes.js and a fourth
- * in a Python notebook (Duplicate Code) -- four places to update one
- * coefficient. Thresholds cite their clinical source.
+ * The clinical formulas live here once, and every caller reads them from here.
+ * These are published equations with fixed coefficients: a second copy is a
+ * second place for one of them to be mistyped, and the error would be invisible
+ * because the output would still look like a plausible number. Thresholds cite
+ * their clinical source.
  */
 
 // ACC/AHA 2017 and ADA thresholds. Mirrors ml/src/domain/models.py.
@@ -38,8 +37,9 @@ export function totalEnergyExpenditure(profile) {
 }
 
 /**
- * Bedogni 2006 Fatty Liver Index, 0-100. Returns null when inputs are
- * insufficient -- v1 substituted the literal 50, which read as a real score.
+ * Bedogni 2006 Fatty Liver Index, 0-100. Returns null when the inputs are
+ * insufficient, because a placeholder mid-range value is indistinguishable from
+ * a genuine moderate result once it reaches the screen.
  */
 export function fattyLiverIndex({ triglycerides, bmi, ggt, waistCm }) {
   if (!(triglycerides > 0 && ggt > 0 && bmi > 0 && waistCm > 0)) return null;

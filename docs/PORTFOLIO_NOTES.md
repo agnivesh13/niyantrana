@@ -102,7 +102,7 @@ v2 makes that structurally impossible: `provenance` is a **required** field on t
 - Mongoose `find()` casts a string id to ObjectId via the schema; `aggregate()` does not. `$match` silently matched nothing, so daily macro totals reported "no meals logged" while the meals sat in the collection.
 - Without `TRUST_PROXY`, Render terminates TLS at its proxy, Express sees plain http, refuses a `Secure` cookie — and login returns **200 with no session.** Nothing errors; users just can't stay logged in.
 
-**Two APIs died mid-project.** I recommended Fitbit on Day 4 as "open registration, not sunsetting" — then found it closed to new developers in May 2024 and sunsets September 2026, with its replacement gated behind restricted-scope review. Pivoted to provider-agnostic file import, which needs no device and cannot be deprecated. Being wrong and correcting it in writing is better than being quietly wrong.
+**Two wearable APIs died mid-project.** Fitbit was the obvious integration until it turned out to have closed to new developers in May 2024 and to sunset in September 2026; Google Fit closed the same day. Their successor, the Google Health API, is implemented here — but every scope is Restricted, so connecting is limited to console test users unless you pay for an annual third-party security assessment. The response was to make file import a first-class path rather than a fallback: it needs no device, no API registration, and cannot be deprecated out from under the project. Having to revise a recommendation in writing is better than being quietly wrong about it.
 
 ---
 

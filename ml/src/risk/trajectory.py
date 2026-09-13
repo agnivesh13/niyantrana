@@ -1,16 +1,15 @@
 """Risk trajectory: how a user's risk has moved over their logged history.
 
-This delivers the deck's "long-term risk trajectory" and "early warning"
-promise **without** a temporal model, and that is a deliberate choice.
+Risk over time, produced without a temporal model, and that is a deliberate
+choice rather than a shortcut.
 
-Why no LSTM here. The v1 design trained a sequence model to map 14 days of
-wearable data onto same-day biomarkers. No real dataset can supervise that --
-nobody draws blood daily -- which is precisely why the original data had to be
-synthetic, and why that model scored R2 -0.89 on held-out users. Retraining it
-as a delta model changes the output but not the supervision problem: there is
-still no open dataset pairing longitudinal wearable data with repeated blood
-draws at usable scale. (PMData is 16 people with no biomarkers; LifeSnaps is 71
-people with no biomarkers.)
+Why no sequence model. Training one to map 14 days of wearable data onto
+same-day biomarkers requires a dataset that pairs longitudinal wearable data
+with repeated blood draws, and none exists at usable scale: nobody draws blood
+daily. (PMData is 16 people with no biomarkers; LifeSnaps is 71 people with no
+biomarkers.) Supervising that mapping on synthetic data teaches a model the
+generator, not the biology, and scores below a mean predictor on held-out
+people.
 
 What works instead. The NHANES risk engine is a function of behaviour: change
 sleep, activity and diet and its output changes. Applying that real,

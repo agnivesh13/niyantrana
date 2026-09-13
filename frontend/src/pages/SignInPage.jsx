@@ -1,15 +1,10 @@
 /**
  * Sign in and sign up, one screen.
  *
- * Two things the previous version got wrong are structural here, not fixed in
- * passing:
- *
- * 1. It scaffolded bearer tokens in localStorage against a backend that uses
- *    Passport session cookies, so nothing it did could have authenticated.
- * 2. Its mock accepted any email and password pair, with a comment saying so.
- *
- * Credentials now go to the server and the server decides. A failed sign-in
- * shows the server message rather than a guess at what went wrong.
+ * Credentials go to the server and the server decides; this screen holds no
+ * opinion about whether they are valid. A failed sign-in shows the server
+ * message rather than a guess at what went wrong, because the guess is wrong
+ * about half the time and sends the user looking in the wrong place.
  */
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';

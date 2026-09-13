@@ -95,10 +95,9 @@ export function parseSamsungCsv(text) {
 
   // Samsung writes a UTF-8 BOM. Left in place it becomes part of the first
   // line, so the metadata line stops matching, the preamble is read as the
-  // header, and every column name is wrong — which surfaces downstream as
-  // "this export contains no usable days". Found only by running the parser
-  // against the real 23 MB file; fixtures cut with a BOM-stripping reader had
-  // hidden it completely.
+  // header, and every column name is wrong -- which surfaces downstream as
+  // "this export contains no usable days" rather than as a parse error. The
+  // test fixtures keep their BOM for this reason.
   const lines = String(text).replace(/^﻿/, '').split(/\r?\n/);
   const start = METADATA_LINE.test(lines[0] ?? '') ? 1 : 0;
   return parseCsv(lines.slice(start).join('\n'));

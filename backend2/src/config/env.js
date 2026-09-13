@@ -1,13 +1,10 @@
 /**
  * Centralised, validated environment configuration.
  *
- * Refactoring applied: Extract Class + Replace Magic Number with Symbolic Constant.
- *
- * Previously `process.env` was read at four unrelated call sites, the port was
- * the literal 8080 hardcoded in server.js, CORS was the literal
- * 'http://localhost:5173', and the session secret silently fell back to
- * 'a secret key for the hackathon'. Configuration is now resolved once, here,
- * and a production boot fails loudly rather than running insecurely.
+ * Configuration is resolved once, here, so no module reads `process.env`
+ * directly and no default is buried at a call site. A production boot fails
+ * loudly on a missing or unsafe value rather than starting in an insecure
+ * state that only shows up later.
  */
 import dotenv from 'dotenv';
 
@@ -43,16 +40,14 @@ const config = {
   geminiApiKey: process.env.GEMINI_API_KEY,
 
   /**
-   * Google identity and the Google Health API.
+   * Google identity and the Google Health API, from one OAuth client.
    *
-   * Replaces the Fitbit block that was here. Fitbit's Web API is turned down in
-   * September 2026 and the Google Health API is its declared successor, so a
-   * Fitbit OAuth seam was config for something that cannot be registered for.
-   * Fitbit remains a supported *import* source -- a file export needs no API.
+   * `clientId` is not a secret: it is sent to every browser by design, which is
+   * why the frontend carries its own copy as VITE_GOOGLE_CLIENT_ID. The secret
+   * is used only here, server-side, for the authorization-code exchange.
    *
-   * `clientId` is not a secret. It is sent to the browser by design, which is
-   * why the frontend has its own VITE_GOOGLE_CLIENT_ID. The secret is only ever
-   * used here, server-side, for the authorization-code exchange.
+   * Both are optional. Unset, sign-in and the Health connection disable
+   * themselves and the password and file-import paths are unaffected.
    */
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
@@ -68,8 +63,8 @@ const config = {
      *
      * Overridable because the published scope-to-data-type mapping does not
      * state which scope covers daily resting heart rate and HRV, and requesting
-     * a scope you do not need is exactly what an OAuth review rejects. Narrow
-     * this once the consent screen shows what each one grants.
+     * a scope the app does not read is what an OAuth review rejects. Narrow the
+     * list once the consent screen shows what each one grants.
      */
     healthScopes: (process.env.GOOGLE_HEALTH_SCOPES
       || ['https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly',
@@ -83,7 +78,8 @@ const config = {
 
 /**
  * Fail fast on misconfiguration rather than booting into an insecure state.
- * The v1 server started happily with a known-public session secret.
+ * A weak or absent session secret is not a warning: it is every session in the
+ * system being forgeable.
  */
 export function assertValidConfig() {
   const problems = [];

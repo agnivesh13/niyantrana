@@ -2,9 +2,9 @@
  * Passport local strategy.
  *
  * Delegates credential checking to AuthService rather than reimplementing
- * bcrypt comparison here (Move Method). The v1 version also had a promise chain
- * with no .catch, so a database error became an unhandled rejection instead of
- * being passed to done().
+ * bcrypt comparison here, so the rule lives with the other authentication
+ * rules. Errors are passed to `done()` rather than left to reject, which is
+ * what keeps a database failure a 500 instead of an unhandled rejection.
  */
 import { Strategy as LocalStrategy } from 'passport-local';
 

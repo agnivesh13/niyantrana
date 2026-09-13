@@ -1,9 +1,9 @@
 /**
  * MongoDB connection.
  *
- * v1 logged the connection failure and carried on, so the server booted with a
- * dead database and every route failed at request time instead of at startup.
- * Connection failure is now fatal, which is what a health check expects.
+ * Connection failure is fatal by design. A server that boots with a dead
+ * database passes its own startup and then fails every request individually,
+ * which reads to a platform health check as healthy and to a user as broken.
  */
 import mongoose from 'mongoose';
 

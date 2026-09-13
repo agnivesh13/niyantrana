@@ -1,12 +1,10 @@
 /**
  * Application error hierarchy.
  *
- * Refactoring applied: Replace Error Code with Exception.
- *
- * The v1 routes signalled failure by returning a 200 response carrying an
- * invented number (`TG: 150 + Math.random() * 50`). A caller could not tell a
- * real prediction from a fabricated one. Failures are now typed exceptions
- * translated to status codes in exactly one place, the error middleware.
+ * Failures are typed exceptions, translated to status codes in exactly one
+ * place: the error middleware. Each carries the status it deserves, so a route
+ * signals what went wrong by throwing rather than by assembling a response, and
+ * no handler can accidentally return 200 for a request that failed.
  */
 export class AppError extends Error {
   constructor(message, statusCode = 500, details = undefined) {

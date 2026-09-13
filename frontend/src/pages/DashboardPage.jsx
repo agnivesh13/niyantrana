@@ -286,18 +286,17 @@ export default function DashboardPage() {
    * Reporting that to a first-time visitor as "the model is not answering"
    * describes a working system as a broken one.
    *
-   * So a 503 starts a wake-and-retry loop. Two details matter, and both were
-   * wrong in the first version of this:
+   * So a 503 starts a wake-and-retry loop, built around two facts about the
+   * platform:
    *
-   *   1. **The wake call must hold the connection open.** `wakeInference` hits
-   *      `?wake=1`, which waits for the cold-start window instead of the
-   *      5-second probe window. The probe aborted long before a ~35-second
-   *      container start, so it reported the service unreachable at exactly the
-   *      moment it was booting, and woke nothing.
+   *   1. **A wake call has to hold the connection open.** `wakeInference` hits
+   *      `?wake=1`, which waits out the cold-start window rather than the
+   *      5-second probe window. A probe that aborts before the container
+   *      finishes starting reports it unreachable at exactly the moment it is
+   *      coming up, and starts nothing.
    *   2. **One attempt is not enough.** If the wake call gives up, the container
    *      may still be starting, so the next round waits again rather than
-   *      reporting failure. Previously the UI tried once and then sat there —
-   *      which is why twenty minutes of waiting produced no further requests.
+   *      reporting failure.
    *
    * Bounded at WAKE_ROUNDS. This is a retry loop, not a poll: when the rounds
    * are spent the failure is reported, because a service that will not start is
@@ -316,16 +315,15 @@ export default function DashboardPage() {
       /**
        * Start the container booting now, not in ninety seconds.
        *
-       * Measured cold start is ~40s from request to first HTTP response. The
-       * first `/predict` carries the API's own budget -- 15s, then one 75s
-       * retry -- so on a cold start the sequence used to be: wait 90 seconds
-       * for that to fail, and only THEN send the first wake-up call. The boot
-       * clock started a minute and a half late.
+       * A cold start takes roughly 40 seconds to first HTTP response, and the
+       * first `/predict` carries the API's own budget of 15s plus one 75s
+       * retry. Waiting for that to fail before waking anything would delay the
+       * boot clock by a minute and a half.
        *
-       * Fired without awaiting: warm, it costs a 0.3s request nobody waits on;
-       * cold, the container is already starting while the first prediction
-       * attempt is in flight, so the API's own retry tends to land on a live
-       * service instead of a sleeping one.
+       * Fired without awaiting: warm, it costs a request nobody waits on; cold,
+       * the container is already starting while the first prediction attempt is
+       * in flight, so the API retry tends to land on a live service rather than
+       * a sleeping one.
        */
       apiService.risk.wakeInference().catch(() => null);
 

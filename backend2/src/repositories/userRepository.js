@@ -1,12 +1,10 @@
 /**
  * Data access for users.
  *
- * Refactoring applied: Extract Class + Hide Delegate.
- *
- * Route handlers previously called `User.findById`, `user.save()` and built
- * `$regex` queries inline -- Feature Envy on the Mongoose model, and a route
- * layer that could not be tested without a live database. Persistence now sits
- * behind this seam, and swapping the store touches one file.
+ * Every read and write of a user document goes through here, so no route or
+ * service holds a Mongoose query of its own. That keeps the layers above
+ * testable against a fake, and means changing how users are stored touches one
+ * file rather than every caller.
  */
 import mongoose from 'mongoose';
 

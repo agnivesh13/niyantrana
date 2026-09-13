@@ -1,9 +1,8 @@
 /**
  * Text helpers shared by the repositories.
  *
- * Refactoring applied: Extract Method on a Duplicate Code smell. `escapeRegex`
- * was written twice, once in each repository, which is exactly how two copies
- * of a security-relevant helper drift apart.
+ * One definition, shared. A security-relevant helper with two copies is a
+ * helper where only one of them gets fixed.
  */
 
 const BACKSLASH = String.fromCharCode(92);
@@ -12,9 +11,9 @@ const REGEX_SPECIALS = new Set([...'.*+?^${}()|[]', BACKSLASH]);
 /**
  * Escapes regex metacharacters in untrusted input.
  *
- * Both v1 repositories interpolated a raw query parameter straight into a
- * `$regex`, which is a regex-injection and ReDoS vector, and also defeats the
- * index on the field being searched.
+ * Interpolating a raw query parameter into a `$regex` is a regex-injection and
+ * ReDoS vector, and it also defeats the index on the field being searched, so
+ * every user-supplied search term passes through here first.
  */
 export function escapeRegex(value) {
   return [...String(value)]

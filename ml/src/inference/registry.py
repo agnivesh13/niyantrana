@@ -1,20 +1,18 @@
 """Lazy, thread-safe registry of loaded model artifacts.
 
-Patterns applied: **Singleton** (one set of loaded weights per process) and
-**Facade** (one place that knows where artifacts live and how to load them).
+One set of weights per process, behind one place that knows where artifacts live
+and how to load them.
 
-What this replaces: `predict.py` loaded the model, both scalers and the food
-database at *module import time*, and called `exit()` if any file was missing.
-Three consequences, all bad:
+Loading is deferred to first use and guarded by a lock, rather than done at
+import. Loading at import time would mean that:
 
-* importing anything from the package -- including in a unit test that never
-  predicts -- paid the full model-load cost;
-* a missing artifact killed the process instead of returning 503, so a
-  half-provisioned deploy crash-looped rather than reporting unhealthy;
-* nothing could be swapped for a fake in tests.
+* importing anything from the package -- including a unit test that never
+  predicts -- pays the full model-load cost;
+* a missing artifact kills the process instead of returning 503, so a
+  half-provisioned deploy crash-loops rather than reporting unhealthy;
+* nothing can be swapped for a fake in tests.
 
-Loading is now deferred to first use, guarded by a lock, and every failure is a
-typed exception the API layer maps to a status code.
+Every failure here is a typed exception the API layer maps to a status code.
 """
 from __future__ import annotations
 

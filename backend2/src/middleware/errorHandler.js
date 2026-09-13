@@ -1,12 +1,12 @@
 /**
  * The single place errors become HTTP responses.
  *
- * Refactoring applied: Chain of Responsibility + Replace Error Code with Exception.
+ * The single place a thrown error becomes an HTTP response.
  *
- * Critically, this never downgrades a failure into a success. If the inference
- * service is unreachable the client receives 503 with provenance
- * "unavailable" -- not a 200 carrying a fabricated risk score, which is what
- * v1 did in three separate places.
+ * Critically, it never downgrades a failure into a success. An unreachable
+ * inference service produces 503 with provenance "unavailable", never a 200
+ * carrying a substituted score: a client that cannot distinguish the two cannot
+ * protect its user from the difference.
  */
 import { AppError } from '../domain/errors.js';
 import config from '../config/env.js';

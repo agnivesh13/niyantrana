@@ -31,7 +31,7 @@ This alone carries Days 2–3. It gives TG, GGT, HbA1c and blood pressure alongs
 
 Both are direct downloads. Kaggle mirrors need a free Kaggle account; the primary sources do not.
 
-**Relevant to:** Day 4 (trajectory model).
+**Relevant to:** the trajectory feature.
 
 ---
 
@@ -53,7 +53,7 @@ Both are direct downloads. Kaggle mirrors need a free Kaggle account; the primar
 - **Registration: YES.** CILogon auth + data use agreement + attest your research is type-2-diabetes related + show research-ethics training
 - 2,280 participants, **3.8 TB / 350k files** — far more than you need, and heavy to handle
 - Free including commercial use
-- **Verdict: skip unless Day 4 stalls.** The size alone is a burden for a student laptop.
+- **Verdict: skip.** The size alone is a burden for a student laptop, and nothing in the current design needs it.
 
 ### CAPTURE-24 (Oxford)
 - **Registration: light.** Oxford ORA download
@@ -78,16 +78,16 @@ These are the real blockers, and they gate specific days:
 
 | Account | Cost | Time | Needed by | Notes |
 |---|---|---|---|---|
-| **Google AI Studio** (Gemini key) | Free | 2 min | Day 5 | `aistudio.google.com` → API key. Free tier ~10 RPM on 2.5 Flash |
+| **Google AI Studio** (Gemini key) | Free | 2 min | `aistudio.google.com` → API key. Free tier ~10 RPM on 2.5 Flash |
 | ~~Fitbit Developer~~ | — | — | — | ❌ **Not available.** New developer signups closed 1 May 2024 and the Fitbit Web API sunsets September 2026. Its replacement, the Google Health API, gates every scope behind a restricted-scope privacy review. Garmin requires a legal entity. **No wearable OAuth is needed:** wearable data arrives via `POST /api/wearable/import` (any provider export) or `POST /api/wearable/demo`. Withings and Oura remain open if you later want a live integration. |
-| **MongoDB Atlas** | Free forever | 10 min | Day 11 | M0 tier, 512 MB, no credit card |
-| **Render** | Free | 5 min | Day 11 | Two free web services (Node + Python) |
-| **Cloudflare Pages** | Free | 5 min | Day 12 | Or Vercel Hobby |
+| **MongoDB Atlas** | Free forever | 10 min | M0 tier, 512 MB, no credit card |
+| **Render** | Free | 5 min | Two free web services (Node + Python) |
+| **Cloudflare Pages** | Free | 5 min | Or Vercel Hobby |
 | **GitHub Student Pack** | Free | ~1 day approval | Optional | DigitalOcean $200 + Azure $100 — buys always-on hosting if cold starts annoy you |
 
 ### ⏰ Do these early
 - **GitHub Student Pack** — approval takes ~a day, and it's the only one with a wait. Apply now if you want it.
-- **NFHS-5 / DHS** — 1–2 day approval. Apply by Day 3 if you want the India calibration on Day 4.
+- **NFHS-5 / DHS** — 1–2 day approval, and the prerequisite for India-calibrating the models.
 
 Everything else is instant and can be done on the day it's needed.
 
@@ -97,4 +97,4 @@ Everything else is instant and can be done on the day it's needed.
 
 **Days 1–9 need zero data registrations.** NHANES is already downloaded, and it is enough to build the entire Risk Engine and get real, defensible metrics.
 
-The only registration with a real deadline is **NFHS-5** (apply by Day 3 if you want it for Day 4), and the only one with a queue is the **GitHub Student Pack**.
+The only registration with a review delay is **NFHS-5** (1–2 days), and the only one with a queue is the **GitHub Student Pack**.

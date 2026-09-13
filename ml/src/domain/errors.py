@@ -1,12 +1,12 @@
 """Domain exception hierarchy.
 
-Refactoring applied: **Replace Error Code with Exception**.
+Every failure mode is a typed exception carrying the status code it deserves,
+and the API layer is the only place that turns one into an HTTP response.
 
-The previous code signalled failure three different ways -- `exit()` at import
-time, returning `None`, and (worst) substituting a plausible random number. A
-caller could not distinguish success from failure. Every failure mode is now a
-typed exception, and the API layer is the only place that maps them to status
-codes.
+The alternative -- signalling failure by returning None, or by substituting a
+plausible value -- leaves a caller unable to tell a real result from a failed
+one. In a health application that is the difference between an estimate and a
+fabrication, so failure is made impossible to ignore by type.
 """
 
 

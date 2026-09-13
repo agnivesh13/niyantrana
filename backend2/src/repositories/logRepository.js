@@ -1,10 +1,10 @@
 /**
  * Data access for meal logs and vital readings.
  *
- * Refactoring applied: Extract Class + Hide Delegate. Aggregation runs as a
- * Mongo pipeline rather than fetching every log and summing in JavaScript --
- * a year of meal logs is thousands of documents, and the database is better at
- * grouping than the API process is.
+ * Aggregation runs as a Mongo pipeline rather than fetching every log and
+ * summing in JavaScript: a year of meal logs is thousands of documents, and
+ * pulling them through the API process to add them up wastes both memory and a
+ * round trip the database could have avoided.
  */
 import mongoose from 'mongoose';
 

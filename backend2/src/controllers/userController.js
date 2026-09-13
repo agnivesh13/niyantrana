@@ -20,8 +20,9 @@ export async function updateWeight(req, res) {
 export async function getWearableData(req, res) {
   const days = Number(req.query.days) || 14;
   const data = await userService.recentWearableData(req.user.id, days);
-  // v1 returned a hardcoded object (8432 steps, 456 cal, 7.5h) when history was
-  // empty. An empty history is now simply an empty list.
+  // An empty history is an empty list. Callers decide what to do about it;
+  // inventing a representative day here would put fabricated movement into
+  // every downstream score.
   res.json({ days: data.length, data });
 }
 

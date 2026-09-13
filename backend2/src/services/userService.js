@@ -1,9 +1,9 @@
 /**
  * Profile and wearable-data operations.
  *
- * Refactoring applied: Move Method. The Mifflin-St Jeor calculation lived
- * inline in two route handlers (Duplicate Code); it now comes from
- * domain/metabolic.js, which mirrors the Python implementation.
+ * Profile rules live here; the metabolic formulas they use come from
+ * domain/metabolic.js, which mirrors the Python implementation so both services
+ * compute a BMR the same way.
  */
 import { NotFoundError, ValidationError } from '../domain/errors.js';
 import { basalMetabolicRate, bodyMassIndex } from '../domain/metabolic.js';
@@ -101,7 +101,8 @@ export class UserService {
 
   /**
    * Recent wearable days. Returns whatever exists; callers decide what to do
-   * with an insufficient window. v1 fabricated 14 days of fake data here.
+   * with an insufficient window, because only they know whether a short window
+   * is a reason to refuse or simply fewer points to plot.
    */
   recentWearableData(userId, days = 14) {
     return this.users.recentWatchData(userId, days);

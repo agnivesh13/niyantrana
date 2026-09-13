@@ -1,7 +1,7 @@
 # Niyantrana — Architecture v2
 
-> **Status:** target design. Day 1 of 15 complete (ML foundations + real-data ingest).
-> Supersedes the v1 design described in the pitch decks.
+> The design as built. Supersedes the original design described in the pitch
+> decks, for the reasons in section 1.
 
 ---
 
@@ -120,7 +120,7 @@ Trained on **real NHANES data**, using only features the app can supply.
 | Wearable-derived | `sleep_hours`, `mvpa_min_week`, `vigorous_min_week`, `moderate_min_week`, `sedentary_min_day` |
 | Lifestyle | `alcohol_drinks_week`, `smoking_status` |
 
-Alcohol is new in v2 and matters: it is a **major GGT confounder** that v1 ignored entirely while using GGT as a headline output.
+Alcohol matters because it is a **major GGT confounder**, and GGT feeds the fatty-liver estimate: omitting it biases that score.
 
 **Model:** `HistGradientBoostingRegressor` (scikit-learn). Chosen over XGBoost/LightGBM because it handles NaN natively — essential for NHANES, where every column has real missingness — and adds **zero deployment dependencies** beyond the scikit-learn already needed for scalers.
 
@@ -139,7 +139,7 @@ Alcohol is new in v2 and matters: it is a **major GGT confounder** that v1 ignor
 - Dysglycaemia — HbA1c ≥ 5.7 (pre) / ≥ 6.5 (diabetic)
 - Hypertension — ≥ 130/80
 
-This is what finally delivers the deck's *"jointly predicts all three conditions"* claim. v1 only ever produced fatty liver.
+This is what delivers the deck's *"jointly predicts all three conditions"* claim; the original produced fatty liver alone.
 
 ### Stage 2 — Trajectory model
 
@@ -200,7 +200,7 @@ POST /api/predict   (session cookie)
 | Concern | v1 | v2 |
 |---|---|---|
 | Gemini API key | Shipped in the browser bundle (`VITE_GEMINI_API_KEY`) | Server-side only, proxied via `/api/chat` |
-| Fitbit secret | n/a | Server-side token exchange, PKCE; never in the client |
+| OAuth secret | n/a | Server-side authorization-code exchange; never in the client |
 | Key logging | `console.log("My Gemini Key Is:", ...)` on every boot | Removed |
 | Flask debug | `debug=True` on `0.0.0.0` — remote Werkzeug console | Removed; FastAPI, no debug |
 | Session secret | Hardcoded fallback `'a secret key for the hackathon'` | Required env var, boot fails without it |
@@ -227,8 +227,8 @@ Upgrade path: GitHub Student Developer Pack (DigitalOcean $200, Azure $100) buys
 
 ## 8. Known limitations (state these openly)
 
-1. **NHANES is a US population.** Metabolic thresholds differ for South Asians — Indian cohorts show higher risk at lower BMI. Day 4 calibrates against NFHS-5/LASI; until then, the model is US-calibrated and says so.
+1. **NHANES is a US population.** Metabolic thresholds differ for South Asians — Indian cohorts show higher risk at lower BMI. Recalibrating against NFHS-5 or LASI is the largest single improvement available; until then the model is US-calibrated and says so, in the UI and in the API response.
 2. **Triglycerides come from the fasting subsample** (7,543 of 17,961), so the FLI head trains on less data than the GGT/HbA1c/BP heads.
-3. **The trajectory model is simulation-trained.** No open dataset pairs longitudinal wearable data with repeated biomarker draws at usable scale.
+3. **The trajectory is a trajectory of estimates.** It scores successive windows of a person's own history with a model fitted across people, because no open dataset pairs longitudinal wearable data with repeated biomarker draws at usable scale.
 4. **NHANES diet is a single 24-hour recall**, which is noisy — it captures one day, not habitual intake.
 5. **This is not a medical device.** Screening and education only.

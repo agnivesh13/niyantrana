@@ -1,19 +1,15 @@
 """FastAPI service: biomarker prediction and meal recommendation.
 
-Replaces two Flask apps (`ml/src/app.py` on :5000 and `rag_engine/src/app.py` on
-:5001), both of which ran `debug=True` bound to `0.0.0.0` -- a remotely
-reachable Werkzeug console. Merging them also halves the number of free-tier
-instances the deployment needs.
+Prediction and recommendation share one process because free-tier instance hours
+are shared across the workspace, and two sleeping services cost twice the
+cold-start latency for no isolation benefit at this size.
 
-Patterns applied:
-
-* **Facade** -- handlers are thin. Each one translates a DTO, calls one domain
-  service, and translates the result back. No clinical logic lives here.
-* **Chain of Responsibility** -- one exception handler per domain error type
-  maps the whole hierarchy to status codes, replacing the try/except ladder
-  that was copy-pasted into every Flask route (**Duplicate Code**).
-* **Dependency Inversion** -- services are resolved through FastAPI's dependency
-  system, so tests inject fakes rather than loading real artifacts.
+Handlers are deliberately thin: each translates a DTO, calls one domain service,
+and translates the result back. No clinical logic lives here, so the rules stay
+testable without a web server. Domain errors map to status codes through one
+handler per error type rather than a try/except in every route, and services are
+resolved through the dependency system so tests can inject fakes instead of
+loading real model artifacts.
 """
 from __future__ import annotations
 

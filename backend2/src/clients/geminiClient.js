@@ -1,10 +1,9 @@
 /**
  * Adapter over the Gemini REST API.
  *
- * This exists so the API key never reaches the browser. v1 called Gemini
- * directly from the frontend with `VITE_GEMINI_API_KEY`, which Vite inlines
- * into the bundle -- anyone who opened devtools had the key, and could spend
- * the quota.
+ * This exists so the API key never reaches the browser. Anything the frontend
+ * can read is in its bundle, and a key in a bundle is a key anyone can spend,
+ * so the browser talks to this service and this service talks to Gemini.
  *
  * Uses `fetch` from the Node runtime rather than the `google-generativeai`
  * SDK. The inference service made the same choice for image size; here the

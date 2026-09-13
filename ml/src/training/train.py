@@ -1,8 +1,9 @@
 """Train the NAFLD_Risk_Forecaster on the pre-split arrays.
 
 The split is produced by `src.data_processing` (disjoint users, scalers fit on
-train only). This module deliberately does NOT split anything itself -- doing so
-here is what previously reintroduced leakage.
+train only). This module deliberately does NOT split anything itself: a second
+split here would draw its test set from rows the scalers have already seen,
+reintroducing the leakage the first split exists to prevent.
 """
 import json
 import os
@@ -60,8 +61,8 @@ def main():
     model.save(MODEL_SAVE_PATH)
     print(f"\nTrained model saved to {MODEL_SAVE_PATH}")
 
-    # Persist the curves -- the previous version discarded `history`, which is
-    # why no loss curve for this project has ever existed.
+    # Persist the curves. Keras returns them once and discards them on exit, so
+    # a run whose history is not written cannot be diagnosed afterwards.
     os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
     with open(HISTORY_PATH, 'w') as fh:
         json.dump({k: [float(v) for v in vals] for k, vals in history.history.items()},

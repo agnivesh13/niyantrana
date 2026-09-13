@@ -1,11 +1,10 @@
-"""Readiness reporting for the artifacts the serving path actually uses.
+"""Readiness reporting for the artifacts the serving path actually reads.
 
-Why this module exists: `/health` previously reported the status of
-`multimodal_model.onnx` and the two MinMax scalers -- the multimodal LSTM path
-that Day 4 retired from serving. It answered "ok" while describing files no
-request touches, and would have kept answering "ok" with the real models
-missing. On a platform where the health check drives restarts and load-balancer
-membership, a health endpoint that monitors the wrong files is worse than none.
+The list here is derived from what `/predict` loads, so a health check cannot
+drift into reporting on files no request touches. On a platform where the health
+check drives restarts and load-balancer membership, an endpoint that monitors
+the wrong artifacts is worse than none: it answers "ok" while every prediction
+fails.
 
 Two levels, because they answer different questions:
 

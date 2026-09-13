@@ -1,18 +1,13 @@
 """Interchangeable model-execution backends.
 
-Pattern applied: **Strategy**.
+The execution engine is selected at load time and hidden behind one interface,
+so the serving path never names a framework. That keeps the deployment decision
+reversible: onnxruntime imports at ~33 MB RSS against TensorFlow at ~358 MB, the
+difference between fitting and running out of memory on a free 512 MB instance,
+while training remains free to use whichever framework suits it.
 
-`predict.py` previously hardcoded `tensorflow.keras.models.load_model` at module
-scope, so swapping to ONNX meant editing the prediction function itself
-(a violation of the Open/Closed Principle, and the reason the earlier ONNX
-migration had to rewrite working code). The execution engine is now a strategy
-selected at load time; callers program to the `InferenceBackend` interface and
-neither know nor care which engine is underneath.
-
-This is what makes the deployment decision reversible: onnxruntime imports at
-~33 MB RSS against TensorFlow's ~358 MB, which is the difference between fitting
-and OOM-ing on a free 512 MB instance -- but training still needs Keras, so both
-must coexist without the serving path importing TensorFlow.
+Callers program to `InferenceBackend` and neither know nor care which engine is
+underneath.
 """
 from __future__ import annotations
 

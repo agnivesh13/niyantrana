@@ -9,8 +9,8 @@
  *    anyone with devtools and spendable against the project quota.
  * 2. **Grounding is visible.** The server says whether a reply was built
  *    against the user own stored assessment, and each answer shows which it
- *    was. The old client faked token-by-token streaming from seven canned
- *    strings on failure, so a stub was indistinguishable from an answer.
+ *    was. A reply that silently fell back to canned text would look exactly
+ *    like one the model produced.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Send, Sparkles } from 'lucide-react';

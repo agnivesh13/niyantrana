@@ -1,8 +1,8 @@
 /**
  * Data access for the Indian food composition database.
  *
- * Refactoring applied: Extract Class. Also fixes a regex-injection vector: the
- * v1 search route interpolated the raw `q` parameter into a `$regex`.
+ * Search terms are escaped before they reach `$regex`, so a user-supplied
+ * string cannot become a pattern. See domain/text.js.
  */
 import Food from '../models/Food.js';
 import { escapeRegex } from '../domain/text.js';

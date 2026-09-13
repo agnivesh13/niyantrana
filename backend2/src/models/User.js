@@ -1,12 +1,13 @@
 /**
  * User persistence schema.
  *
- * Fixes carried over from v1:
- * - `watchDataSchema` declared `calories_burned` / `resting_heart_rate` while the
- *   ingest route wrote `active_calories` / `heart_rate`. Mongoose strict mode
- *   silently discarded both, so two of six model features were always absent.
- *   Aliases now accept either spelling.
- * - `password` was returned by default on every query. It is now `select: false`.
+ * Two schema decisions worth knowing:
+ * - Wearable fields carry aliases (`heart_rate` for `resting_heart_rate`,
+ *   `active_calories` for `calories_burned`). Mongoose strict mode discards an
+ *   unrecognised key without complaint, so a spelling mismatch between an
+ *   ingest path and the schema would drop a model feature silently.
+ * - `password` and the OAuth tokens are `select: false`, so a query has to ask
+ *   for them explicitly and cannot leak them by forgetting to exclude them.
  * - `healthReportSchema` existed but nothing ever wrote to it (Dead Code); it is
  *   now actually populated by the risk service.
  */

@@ -1,18 +1,16 @@
 /**
  * Chat state, backed by the server-side Gemini proxy.
  *
- * Replaces a browser-side client that read `VITE_GEMINI_API_KEY`. Vite inlines
- * anything VITE_-prefixed into the bundle, so that key was readable by anyone
- * who opened devtools, and spendable against the project quota. The key now
- * lives only on the server and the browser calls POST /api/chat.
+ * The browser calls POST /api/chat and the key stays on the server. Anything
+ * VITE_-prefixed is inlined into the bundle, so a key reachable from here would
+ * be a key readable by anyone who opens devtools.
  *
- * The old client also faked token-by-token streaming from seven canned strings
- * whenever the API failed, so a user could not tell a real answer from a stub.
- * A failure is now surfaced as a failure.
+ * A failure is surfaced as a failure. Substituting a canned reply would be
+ * indistinguishable from a real answer on screen.
  *
- * The server reports `grounded` on every reply -- whether the answer was built
- * against the user own stored assessment or answered generally -- and that flag
- * is carried through to the UI rather than dropped here.
+ * The server reports `grounded` on every reply -- whether it was built against
+ * the user own stored assessment or answered generally -- and that flag is
+ * carried through to the UI rather than dropped here.
  */
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 

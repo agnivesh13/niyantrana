@@ -1,16 +1,15 @@
 /**
  * Onboarding: the profile, then fourteen days of wearable history.
  *
- * Both steps are required for a reason the UI states plainly rather than
- * discovering at the end: the server refuses an assessment without a complete
- * profile and without 14 days of wearable data. The previous version generated
- * `5000 + i * 100` steps when history was missing and produced a confident
- * score from data that did not exist, so there was nothing to onboard into.
+ * Both steps are required, and the UI says so up front rather than letting the
+ * user discover it at the end: the server refuses an assessment without a
+ * complete profile and without 14 days of wearable data, and padding a short
+ * history would mean scoring days that were never recorded.
  *
- * The demo history exists because every consumer wearable API a solo developer
- * could register for has closed. A file export is the durable path, and a
- * seeded history means a reviewer with no device still sees a working app --
- * with every seeded row tagged `source: demo` in the database.
+ * Four ways in, because no single one covers everyone: Google Health for a
+ * linked account, a Samsung Health archive, a generic device export, and a
+ * seeded demo history so someone with no wearable at all still sees a working
+ * app. Every seeded row is stored tagged `source: demo`.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';

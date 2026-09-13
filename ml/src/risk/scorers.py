@@ -1,16 +1,13 @@
 """Per-condition risk scorers.
 
-Patterns applied: **Strategy** + **Template Method**.
+One strategy object per condition, so adding a condition is a new class rather
+than another branch in a growing conditional, and no clinical rule sits inside
+an HTTP handler.
 
-The v1 code computed one condition (fatty liver) inline inside an Express route
-handler, mixing the clinical formula with HTTP concerns and a random fallback.
-Adding diabetes and hypertension that way would have meant a growing `if`
-cascade in the same handler -- textbook **Divergent Change**.
-
-Each condition is now a strategy object. `RiskScorer.score()` is the template
-method: it fixes the invariant skeleton (obtain a value -> clamp -> band ->
-package with provenance AND basis) so no scorer can emit a number without
-declaring both where the data came from and which model produced it.
+`RiskScorer.score()` fixes the skeleton every condition follows -- obtain a
+value, clamp it, band it, package it with provenance AND basis -- so no scorer
+can emit a number without declaring both where the data came from and which
+model produced it.
 
 **Score source precedence.** Where a calibrated classifier covers the condition,
 its probability is the score: it is a direct estimate of "does this person have

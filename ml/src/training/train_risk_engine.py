@@ -1,10 +1,10 @@
 """Train the multi-target Risk Engine on real NHANES data.
 
-This is the scientific core of Niyantrana v2. It replaces the synthetic-data
-LSTM as the source of biomarker estimates, because that model scored R^2 -0.89
-on held-out *users* -- worse than predicting the mean -- once the leakage was
-removed. Fifteen synthetic personas is nine training examples at the person
-level; no architecture recovers from that.
+The scientific core: every biomarker estimate the service serves comes from
+here. Trained on real NHANES participants rather than synthetic personas,
+because a synthetic generator built from a handful of personas gives a model the
+generator to memorise and almost no independent people to learn from -- which
+scores below a mean predictor once the split is by person.
 
 Design decisions and why:
 
@@ -27,7 +27,8 @@ Design decisions and why:
 
 * **Every target is compared against a mean-predictor baseline.** A model that
   cannot beat "always guess the training mean" has learned nothing, and that
-  comparison is the one number the v1 project never computed.
+  comparison is what separates a model that learned something from one that
+  merely reproduced the average.
 
 Run from the ml/ directory:
     python -m src.training.train_risk_engine
@@ -246,7 +247,7 @@ def evaluate_target(df: pd.DataFrame, spec: TargetSpec) -> tuple[dict, HistGradi
 def permutation_importance(model, X, y, spec, repeats=3) -> dict:
     """Feature importance by shuffling each column and measuring MAE damage.
 
-    Model-agnostic and cheap; SHAP arrives on Day 3 for the classification heads.
+    Model-agnostic and cheap. SHAP covers the classification heads separately.
     """
     rng = np.random.default_rng(RANDOM_SEED)
     baseline = float(np.mean(np.abs(spec.inverse(model.predict(X)) - y)))

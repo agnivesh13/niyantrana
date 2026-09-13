@@ -1,8 +1,8 @@
 /**
  * Registration and credential verification.
  *
- * Refactoring applied: Extract Class. authRoutes.js previously mixed HTTP
- * parsing, duplicate checking, bcrypt hashing and persistence in one handler.
+ * Registration, credential checking and Google sign-in, kept out of the route
+ * handlers so the rules can be exercised without an HTTP request.
  */
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';

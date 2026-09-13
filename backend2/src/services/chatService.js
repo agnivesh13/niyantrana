@@ -3,9 +3,9 @@
  *
  * Grounds every reply in the user's own stored data, so the assistant talks
  * about the numbers the app actually holds rather than inventing plausible
- * ones. v1's chatbot ran entirely in the browser with no access to the user's
- * record, and silently fell back to seven canned strings when the API failed --
- * the user could not tell a real answer from a stub.
+ * ones, and a failure is reported as a failure. A canned reply substituted for
+ * a real answer is indistinguishable from one on screen, which is how a user
+ * ends up trusting a sentence the model never produced.
  *
  * The system prompt also carries the constraints that keep this a wellness tool
  * rather than an unlicensed clinician.

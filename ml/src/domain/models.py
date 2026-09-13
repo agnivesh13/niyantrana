@@ -1,22 +1,17 @@
 """Immutable domain value objects.
 
-Refactorings applied:
+A profile and a window of wearable days validate themselves once, at the
+boundary, so no consumer downstream has to re-check them. They are frozen
+dataclasses: a profile cannot be mutated midway through a pipeline, which keeps
+the value that was scored identical to the value that was received.
 
-* **Introduce Parameter Object** / **Replace Data Value with Object** -- the old
-  code passed an 11-key raw dict as `user_data` and a 14-row DataFrame as
-  `watch_data` through every layer (a **Data Clump**). Those are now
-  `UserProfile` and `WearableWindow`, which validate themselves once at the
-  boundary instead of every consumer re-checking.
-* **Replace Magic Number with Symbolic Constant** -- clinical thresholds
-  (FLI >= 60, HbA1c >= 5.7, BP >= 130/80) were previously inline literals
-  duplicated across Python and JavaScript. They live here once.
-* **Encapsulate Field** -- these are frozen dataclasses; nothing downstream can
-  mutate a profile mid-pipeline. The old `predict.py` mutated its caller's
-  DataFrame in place.
+Clinical thresholds (FLI >= 60, HbA1c >= 5.7, BP >= 130/80) are named constants
+here, and here only. They are cited in scorer rationales shown to users, so a
+figure that drifted between two definitions would be a figure the app states
+incorrectly.
 
-This module deliberately has **no I/O and no framework imports**. It is the
-stable core that the inference, risk, API and training layers all depend on --
-dependencies point inward (Dependency Inversion).
+This module has no I/O and no framework imports. It is the stable core that the
+inference, risk, API and training layers depend on; dependencies point inward.
 """
 from __future__ import annotations
 
@@ -33,9 +28,9 @@ SEQUENCE_LENGTH = 14
 class Provenance(str, Enum):
     """Where a number came from. Every emitted value carries one.
 
-    The v1 codebase returned `Math.random()` as an "AI risk assessment" in three
-    separate places with no way for a caller to tell. Making provenance part of
-    the type system means a value cannot be constructed without declaring it.
+    Part of the type system rather than an optional annotation: a score cannot be
+    constructed without declaring its origin, so no layer can emit a value whose
+    provenance a caller is unable to establish.
     """
 
     MODEL = "model"              # real prediction from the NHANES-trained engine
@@ -125,10 +120,9 @@ class UserProfile:
     # Daily dietary totals, aggregated from meal logs.
     #
     # None means "not logged", which is NOT the same as 0.0 ("ate nothing").
-    # The gradient-boosting estimators handle a missing feature natively, so an
-    # honest absence produces a wider-but-correct estimate, whereas a zero would
-    # tell the model the user fasted. This project exists because v1 substituted
-    # plausible values for missing ones.
+    # Optional because "not logged" and "ate nothing" are different facts. The
+    # gradient-boosting estimators take a missing feature natively and produce a
+    # wider-but-correct estimate; a zero would assert that the user fasted.
     energy_kcal: float | None = None
     fat_g: float | None = None
     carb_g: float | None = None
@@ -137,8 +131,8 @@ class UserProfile:
     fibre_g: float | None = None
     satfat_g: float | None = None
 
-    # Lifestyle. Alcohol is a major GGT confounder that v1 ignored entirely
-    # while using GGT as a headline output.
+    # Lifestyle. Alcohol is a major confounder for GGT, which feeds the
+    # fatty-liver estimate, so omitting it would bias that score.
     alcohol_drinks_week: float = 0.0
     smoking_status: int = 0  # 0 never, 1 former, 2 current
 
@@ -275,9 +269,9 @@ class WearableDay:
 class WearableWindow:
     """An ordered run of wearable days, oldest first.
 
-    Encapsulates the sequence-length invariant that was previously re-checked by
-    hand in `predict_risk`, and exposes the aggregate queries the feature bridge
-    needs (**Replace Temp with Query**).
+    Holds the sequence-length invariant in one place, and exposes the aggregate
+    queries the feature bridge reads so that callers never average the raw days
+    themselves.
     """
 
     days: tuple[WearableDay, ...]
@@ -363,8 +357,8 @@ class Biomarkers:
         Returns a directly-predicted value when one is present, otherwise
         computes the formula from triglycerides and GGT.
 
-        Previously duplicated in `apiRoutes.js`, `predict.py` and a notebook
-        (**Duplicate Code**), which meant three places to fix a coefficient.
+        Defined here alone. The coefficients are published clinical constants,
+        and a second copy is a second place for one of them to be wrong.
         """
         if self.fli is not None:
             return self.fli
@@ -414,12 +408,9 @@ class RiskScore:
 class AssessmentContext:
     """Everything a scorer needs to judge one person.
 
-    Refactoring applied: **Introduce Parameter Object**. Scorers previously took
-    (profile, biomarkers, provenance); composition added calibrated
-    probabilities and an optional wearable window, which would have made a
-    four-argument call repeated at every site (a **Long Parameter List** and a
-    **Data Clump**). Widening the object leaves the scorer interface stable as
-    new signals are added.
+    One object rather than a widening argument list, so a new signal reaches
+    every scorer by being added here instead of by editing each call site and
+    each signature.
     """
 
     profile: UserProfile

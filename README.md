@@ -2,10 +2,11 @@
 
 Metabolic risk screening for an Indian user base — fatty liver, dysglycaemia and hypertension — estimated from what a person eats, how they move and how they sleep.
 
-> **Live:** [API](https://niyantrana-api.onrender.com/health) · [inference service](https://niyantrana-inference.onrender.com/health)
-> Both on Render's free tier, so the first request after 15 minutes idle takes ~1 minute to wake.
+> **Live:** [niyantrana.agnivesh.dev](https://niyantrana.agnivesh.dev) · [API health](https://niyantrana-api.onrender.com/health) · [inference health](https://niyantrana-inference.onrender.com/health)
 >
-> **Status:** backend and ML deployed and tested (185 tests). The web client is built and verified against the deployed API, but not yet hosted — the links above are JSON health checks until it is. See [docs/MANUAL_CHECKLIST.md](docs/MANUAL_CHECKLIST.md).
+> Both services run on Render's free tier and spin down after 15 minutes idle. The app wakes them itself — the landing page starts the model container while you read, and the dashboard retries around a cold start — so the first visit of the day takes about 40 seconds rather than failing.
+>
+> **242 tests** (138 Node, 104 Python). Setup that needs your own accounts is in [docs/SETUP.md](docs/SETUP.md).
 >
 > **Not a medical device.** Screening and education only. Every risk score carries this disclaimer in the API response.
 
@@ -109,7 +110,7 @@ Locked by tests in both services.
 
 ```mermaid
 flowchart LR
-    PWA["React PWA<br/>(being rebuilt)"] -->|"fetch, credentials: include"| API
+    WEB["React 18 + Vite<br/>Cloudflare Pages"] -->|"fetch, credentials: include"| API
     API["Node / Express 5<br/>Passport sessions"] --> DB[("MongoDB Atlas M0")]
     API -->|"POST /predict"| INF["FastAPI + scikit-learn<br/>onnxruntime-free, 627 MB image"]
     API -->|"proxied — key never in browser"| GEM["Gemini API"]
@@ -140,8 +141,9 @@ Measured: importing TensorFlow costs **358 MB RSS**; onnxruntime costs 33 MB; th
 | Data | NHANES 2013–2018 (CDC, public domain), Anuvaad INDB 2024.11 |
 | API | Node 22, Express 5, Mongoose, Passport (session cookies), Google Identity Services for sign-in |
 | Inference | FastAPI, Pydantic, uvicorn |
-| Tests | pytest (102) + `node:test` (83) — **185 total, zero test-framework dependencies on the Node side** |
-| Deploy | Render × 2 + MongoDB Atlas M0, `render.yaml` blueprint |
+| Web | React 18, Vite 6, Tailwind, Recharts, fflate (client-side unzip) |
+| Tests | pytest (104) + `node:test` (138) — **242 total, zero test-framework dependencies on the Node side** |
+| Deploy | Render × 2 + MongoDB Atlas M0 (`render.yaml` blueprint), Cloudflare Pages |
 
 ---
 
@@ -206,21 +208,23 @@ curl -s -b j -X POST $API/api/predict       -H 'Content-Type: application/json' 
 
 ## Wearable data
 
-Three paths in, because the API landscape moved twice while this was being built. Verified September 2026:
+Four ways in, because no single one reaches everybody. The consumer API landscape as of September 2026:
 
 | Provider | Status |
 |---|---|
-| Google Health API | ✅ **implemented** — the live successor to both below. Every scope is Restricted, so it works for accounts added as console test users until the app passes OAuth verification |
+| Google Health API | ✅ implemented. Successor to both below. Every scope is Restricted, so connecting is limited to accounts added as test users until the app passes OAuth verification |
 | Google Fit | New signups closed 1 May 2024; APIs deprecating |
-| Fitbit Web API | New signups closed 1 May 2024; **sunset September 2026** |
+| Fitbit Web API | New signups closed 1 May 2024; sunset September 2026 |
 | Garmin | Requires a legal entity; rejects personal-use applications |
 | Withings, Oura | Still open to individual developers; not implemented |
 
-**Google Health** is the first-party route: `POST /api/wearable/google-health/sync` reads steps and active minutes from the daily roll-up endpoints, assembles sleep hours and efficiency from session stages, and lists daily resting heart rate and HRV — then merges them into the same wearable history everything else uses. Every sync returns a per-feature report naming the field path it resolved and the days it covered, because the published reference does not name every value field; a feature it cannot find stays **absent rather than zero**, since a zero would read to the model as "did not move".
+**Google Health** — `POST /api/wearable/google-health/sync` reads steps and active minutes from the daily roll-up endpoints, assembles sleep hours and efficiency from session stages, and lists daily resting heart rate and HRV. Where the platform has no derived daily record — a Samsung-fed account supplies raw samples instead — resting heart rate falls back to the daily *minimum* of intraday heart rate, never the mean, and the report says the value was derived. Every sync returns a per-feature report naming the field path it resolved, because the published reference does not name every value field. A feature it cannot find stays **absent rather than zero**: a zero reads to the model as "did not move".
 
-**File import stays the primary path**, not a fallback. `POST /api/wearable/import` accepts CSV, a JSON array, or the per-metric shape Google Takeout produces, normalising ~40 field aliases across Fitbit / Apple Health / Oura / Withings. It needs no device, and cannot be deprecated out from under the project.
+**Samsung Health** — `POST /api/wearable/import/samsung` takes the export archive as Samsung produces it. The browser unzips it, extracts the four files this reads out of 14,507 entries and trims them to the window the model uses; the server parses and derives every value. The format needs a dedicated parser: the header is on line 2 under a metadata line, rows carry a trailing comma, `active_time` is milliseconds while `sleep_duration` is minutes, and a night arrives as several fragments whose efficiency has to be weighted by duration. Days recorded by more than one device use the highest-reporting device, which matches Samsung's own daily aggregate.
 
-`POST /api/wearable/demo` seeds 90 days of correlated, deterministic history — every row stored with `source: "demo"`, so seeded data is distinguishable at the record level rather than by a banner.
+**Generic import** — `POST /api/wearable/import` accepts CSV, a JSON array, or the per-metric shape Google Takeout produces, normalising ~40 field aliases across Fitbit / Apple Health / Oura / Withings. It needs no device and no API registration, so it cannot be deprecated out from under the project.
+
+**Demo** — `POST /api/wearable/demo` seeds 90 days of correlated, deterministic history, every row stored with `source: "demo"`. It refuses to overwrite real days unless the overwrite is confirmed.
 
 ---
 
@@ -238,9 +242,9 @@ Three paths in, because the API landscape moved twice while this was being built
 ## What I'd do next
 
 - Recalibrate on **LASI** (~72,000 Indians with HbA1c and BP) for India-appropriate thresholds
-- Pass Google OAuth verification, so anyone (not only console test users) can connect their own Google Health data
+- Pass Google OAuth restricted-scope verification, so anyone — not only console test users — can connect their own Google Health data
 - Quantify the self-report vs sensor gap using NHANES `PAXDAY` accelerometry, which is paired within-person with the questionnaire
-- Host the web client (Cloudflare Pages) and smoke-test it from a phone on mobile data
+- Capture profile snapshots over time, so a trajectory reflects weight change as well as behaviour change
 
 ---
 
@@ -248,10 +252,10 @@ Three paths in, because the API landscape moved twice while this was being built
 
 | Path | |
 |---|---|
-| [ml/](ml/) | Training, inference, FastAPI service, 84 tests |
-| [backend2/](backend2/) | Node API, 79 integration tests |
-| [frontend/](frontend/) | React 18 + Vite + Tailwind client — six screens, no mock data, no secrets in the bundle |
-| [docs/](docs/) | Architecture, refactoring log, data sources, deployment, manual checklist |
+| [ml/](ml/) | Training, inference, FastAPI service, 104 tests |
+| [backend2/](backend2/) | Node API, 138 tests |
+| [frontend/](frontend/) | React 18 + Vite + Tailwind client — seven screens, no mock data, no secrets in the bundle |
+| [docs/](docs/) | Architecture, design notes, data sources, deployment, setup |
 | [ml/RESULTS.md](ml/RESULTS.md) | Every metric, ablation and negative result |
 | [PROJECT_PLAN.md](PROJECT_PLAN.md) | Day-by-day build log |
 

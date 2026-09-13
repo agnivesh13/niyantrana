@@ -1,14 +1,11 @@
 /**
  * Routes.
  *
- * Wiring only: no layout, no state, no fallbacks. The previous App.jsx declared
- * ten routes, six of them to pages built entirely on mock data (a community
- * feed, a gamified wellness journey, a reports page that rendered a hardcoded
- * stranger lab results), and had no 404 and no error element.
+ * Wiring only: no layout, no state, no fallbacks.
  *
- * Four screens survive, because four screens is what the backend can honestly
- * serve: an overview, auth, onboarding, and the dashboard -- plus logging and
- * the assistant, both of which are real endpoints.
+ * Every route here is backed by a real endpoint. A screen with nothing behind
+ * it can only be filled with invented content, which in a health application is
+ * the failure mode the rest of the codebase is built to prevent.
  */
 import { Navigate, RouterProvider, createBrowserRouter, useRouteError } from 'react-router-dom';
 
@@ -36,9 +33,9 @@ function Resolving() {
 /**
  * Gate on real session state.
  *
- * The session cookie is HttpOnly, so the only way to know whether one is valid
- * is to ask the server -- which is why this waits rather than guessing from
- * localStorage, as the version it replaces did.
+ * The session cookie is HttpOnly, so the browser cannot inspect it and the
+ * only way to know whether one is valid is to ask the server. This waits for
+ * that answer rather than rendering a guess and correcting it a moment later.
  */
 function RequireAuth({ children }) {
   const { isAuthenticated, isLoading } = useAuth();

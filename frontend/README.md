@@ -1,6 +1,6 @@
 # Niyantrana web client
 
-React 18 + Vite + Tailwind. Six screens, no mock data, no secrets in the bundle.
+React 18 + Vite + Tailwind. Seven screens, no mock data, no secrets in the bundle.
 
 ```bash
 npm install
@@ -15,10 +15,11 @@ npm run smoke    # renders every screen through react-dom/server
 |---|---|
 | `/` | Overview. Headline metrics, what the model is built on, and the limitations, stated on the page rather than buried |
 | `/signin` | Sign in with Google, or email and password, against Passport **session cookies** |
-| `/onboarding` | Profile, then wearable history — connect Google Health, import a device export, or seed a demo |
+| `/onboarding` | Profile, then wearable history — connect Google Health, upload a Samsung Health archive, import a device export, or seed a demo |
 | `/dashboard` | Four risk cards, the trajectory chart, estimated biomarkers, and what the assessment was computed from |
 | `/log` | Meal logging against the Indian food database, and measured vitals |
 | `/assistant` | Server-proxied Gemini chat, with grounding shown per reply |
+| `/profile` | The eight values the model scores you on, editable; where your history came from, by source; and account deletion |
 
 ## What this client will not do
 

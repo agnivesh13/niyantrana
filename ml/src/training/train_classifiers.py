@@ -1,9 +1,8 @@
 """Train calibrated binary risk classifiers for the three headline conditions.
 
-Day 2 produced regressors that estimate biomarker *levels*. This module turns
-those into the clinical question a user actually asks: "am I at risk?" -- as a
-calibrated probability, so a reported 30% means roughly three in ten such people
-are affected.
+The regression engine estimates biomarker *levels*. This module answers the
+question a user actually asks -- "am I at risk?" -- as a calibrated probability,
+so a reported 30% means roughly three in ten such people are affected.
 
 Design decisions and why:
 
@@ -25,7 +24,8 @@ Design decisions and why:
 
 * **The fatty-liver head is judged against a BMI+waist-only classifier**, not
   against chance. FLI is a formula whose four terms include BMI and waist, both
-  measured exactly, so most of its apparent skill is arithmetic. Day 2 found the
+  measured exactly, so most of its apparent skill is arithmetic. The regression
+  run found the
   same thing for the regression head.
 
 Run from the ml/ directory:

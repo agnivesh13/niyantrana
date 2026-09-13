@@ -1,10 +1,10 @@
 """Retrieval-augmented meal recommendation over the Anuvaad INDB database.
 
-Patterns applied:
+Structure:
 
-* **Adapter** -- `GeminiClient` wraps the vendor SDK behind a two-method
-  interface, so swapping LLM providers (or injecting a fake in tests) touches
-  one class. The old code called `genai.configure()` at import scope.
+* `GeminiClient` wraps the vendor API behind a two-method interface, so swapping
+  providers or injecting a fake in tests touches one class, and no credential is
+  read at import time.
 * **Facade** -- `RecommendationEngine` is the one public entry point; retrieval,
   prompt construction and generation are collaborators.
 * **Flyweight** (in spirit) -- `FoodRepository` loads the 1,014-row database
@@ -93,7 +93,7 @@ class FoodRepository:
         except FileNotFoundError:
             print(f"WARNING: food database not found at {self._path}; retrieval disabled.")
             return pd.DataFrame(columns=list(REQUIRED_COLUMNS))
-        # dropna covers food_name too -- a NaN name previously produced a
+        # dropna covers food_name too -- a NaN name would produce a
         # non-boolean mask and crashed the filter.
         frame = frame.dropna(subset=list(REQUIRED_COLUMNS))
         frame["_name_lower"] = frame["food_name"].astype(str).str.lower()

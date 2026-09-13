@@ -1,21 +1,16 @@
 """Translate domain objects into the numeric arrays a model consumes.
 
-Refactorings applied:
+Feature assembly is isolated from validation, scaling and inference so each can
+be tested alone. The column mapping is a declarative table of extractor
+callables rather than a chain of conditionals: adding a feature is a new row
+instead of an edit to control flow, and the training and serving sides can be
+compared column by column.
 
-* **Extract Class** -- feature assembly used to live inside `predict_risk`,
-  tangled together with validation, scaling, reshaping and inverse-transforming
-  (a **Long Method** doing five jobs).
-* **Replace Conditional with Polymorphism** (table-driven form) -- the column
-  mapping is a declarative dict of extractor callables rather than a chain of
-  ifs, so adding a feature means adding one row, not editing control flow.
-* **Replace Temp with Query** -- derived quantities (TEE, energy balance) are
-  properties on `UserProfile` instead of locals recomputed per call site.
-
-The bug this design eliminates: the original built its feature frame by
-`pd.concat`-ing a 1-row profile with a 14-row window on `axis=1`, leaving rows
-1..13 NaN, then read row 13 -- so the entire tabular branch received NaN and
-every user received an identical prediction. Here the profile is explicitly
-broadcast across the window, because static features *are* constant over it.
+The static profile is explicitly broadcast across the 14-day window rather than
+concatenated against it. Static features are constant over the window by
+definition, and aligning a 1-row frame with a 14-row frame would leave the
+profile columns empty on every row but the first -- which a model reads as a
+missing profile rather than as an error.
 """
 from __future__ import annotations
 

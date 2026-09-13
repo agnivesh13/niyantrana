@@ -1,9 +1,9 @@
 /**
  * Route table.
  *
- * Refactoring applied: Extract Class. Routing is now declarative wiring only;
- * handlers live in controllers and rules live in services. asyncHandler removes
- * the try/catch that was copy-pasted into every v1 handler.
+ * Declarative wiring only: handlers live in controllers, rules live in
+ * services, and this file says which URL reaches which. asyncHandler forwards
+ * rejected promises to the error middleware so no handler needs a try/catch.
  */
 import express, { Router } from 'express';
 
@@ -46,7 +46,7 @@ router.get('/api/user/wearable', authenticate, asyncHandler(userController.getWe
 router.delete('/api/user/account', authenticate, asyncHandler(userController.deleteAccount));
 router.post('/api/user/wearable', authenticate, asyncHandler(userController.recordWearableData));
 
-// Food search is authenticated; v1 left it open.
+// Authenticated: the food database is a licensed dataset, not a public API.
 router.get('/api/food/search', authenticate, asyncHandler(userController.searchFood));
 
 // --- Logging: meals, vitals, activity ---
@@ -84,8 +84,7 @@ router.delete('/api/wearable/google-health', authenticate,
   asyncHandler(wearableController.googleHealthDisconnect));
 
 // --- Conversational assistant ---
-// Server-side proxy: the Gemini key must never reach the browser, which is
-// exactly what v1 did by inlining VITE_GEMINI_API_KEY into the bundle.
+// Server-side proxy, so the Gemini key stays out of the browser bundle.
 router.post('/api/chat', authenticate, asyncHandler(logController.chat));
 
 // --- Risk assessment ---

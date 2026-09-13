@@ -1,17 +1,14 @@
 /**
  * Orchestrates a risk assessment.
  *
- * Pattern applied: Facade over the user repository and the inference client.
+ * One entry point for producing an assessment, over the user repository and
+ * the inference client.
  *
- * This class is the direct replacement for apiRoutes.js, which was a 138-line
- * Long Method that fetched the user, fabricated wearable data when none
- * existed, called the ML service, substituted random biomarkers on any failure,
- * re-implemented the Fatty Liver Index in JavaScript, and attached a hardcoded
- * "Oats / Salad / Soup" action plan.
- *
- * Every one of those fallbacks is gone. If an assessment cannot be produced,
- * that fact is reported. In a health application, a plausible invented number
- * is worse than an error.
+ * It has no fallbacks. If an assessment cannot be produced -- too little
+ * wearable history, an incomplete profile, an unreachable model -- that fact is
+ * reported and no score is returned. In a health application a plausible
+ * invented number is worse than an error, because only the error is visible to
+ * the person relying on it.
  */
 import inferenceClient from '../clients/inferenceClient.js';
 import { NotFoundError, ValidationError } from '../domain/errors.js';
@@ -44,9 +41,9 @@ export class RiskService {
   /**
    * Translates stored documents into the inference wire format.
    *
-   * Refactoring: Extract Method. v1 built this object inline and omitted every
-   * dietary field, while leaving a comment admitting the model needed them --
-   * so the model branch that consumes them received nothing usable.
+   * The dietary fields are part of the contract, not optional extras: the
+   * model reads them, and sending the profile without them silently discards a
+   * third of its inputs.
    */
   static toProfilePayload(staticData, dietTotals = {}) {
     return {
@@ -91,10 +88,9 @@ export class RiskService {
   /**
    * Produce an assessment.
    *
-   * Diet totals and measured biomarkers are read from the user own logs, NOT
-   * taken from the caller. Previously the client supplied `dietTotals`, so a
-   * browser could assert any nutrition figures it liked and the model would
-   * treat them as observed intake.
+   * Diet totals and measured biomarkers are read from the user own logs, never
+   * taken from the caller. A client that could supply its own nutrition figures
+   * could assert any intake it liked, and the model would treat it as observed.
    */
   async assess(userId, { measured } = {}) {
     const user = await this.users.findById(userId);
@@ -111,8 +107,8 @@ export class RiskService {
     const history = await this.profiles.recentWearableData(userId, TRAJECTORY_HISTORY_DAYS);
     const window = history.slice(-REQUIRED_WEARABLE_DAYS);
     if (window.length < REQUIRED_WEARABLE_DAYS) {
-      // An honest refusal. v1 generated `5000 + i * 100` steps and carried on,
-      // producing a confident risk score from data that did not exist.
+      // An honest refusal. Padding the window to length would produce a
+      // confident score from days that were never recorded.
       throw new ValidationError(
         `An assessment needs ${REQUIRED_WEARABLE_DAYS} days of wearable data; `
         + `${window.length} recorded so far.`,
@@ -134,8 +130,8 @@ export class RiskService {
       measured: measured ?? recorded?.measured ?? null,
     });
 
-    // Persist for trend analysis. healthHistory existed in the v1 schema but
-    // nothing ever wrote to it (Dead Code).
+    // Persisted so the dashboard can show how risk has moved, rather than
+    // recomputing history from scratch on every visit.
     await this.users.appendHealthReport(userId, {
       biomarkers: assessment.biomarkers,
       risks: assessment.risks?.map(({ condition, score, band, rationale }) => ({

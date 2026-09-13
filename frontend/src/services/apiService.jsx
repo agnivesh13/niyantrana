@@ -1,20 +1,11 @@
 /**
- * HTTP client for the Niyantrana API.
+ * The single place this app talks to its API.
  *
- * Replaces a 772-line mock service whose header read "Mock API Service for
- * Frontend-Only Operation". That file fabricated health data in twenty places:
- * `riskScore: Math.floor(Math.random() * 100)` presented as an AI risk
- * assessment, and invented cholesterol, glucose and haemoglobin values returned
- * as if extracted from an uploaded lab report.
- *
- * Six of its eight namespaces (healthAPI, assessmentAPI, mlAPI, chatAPI,
- * healthCheckAPI, uploadAPI) were imported by nothing at all -- roughly 600
- * lines of dead code that also constituted the project's worst safety problem.
- *
- * Auth is session cookies, not bearer tokens: the backend uses Passport
- * sessions, so every request sends `credentials: 'include'`. The old file kept
- * `authToken` / `refreshToken` in localStorage, which was the wrong shape for
- * the backend that actually exists.
+ * Auth is session cookies, not bearer tokens, so every request sends
+ * `credentials: 'include'` and no token is stored client-side. Failures throw
+ * `ApiError` carrying the real status: nothing is substituted on failure, which
+ * is what lets a screen tell "the model is down" apart from "you have no data
+ * yet" and say so.
  */
 
 /**
@@ -25,9 +16,8 @@
  * In production the two are on different hosts, so VITE_API_BASE_URL is set and
  * the API answers with `SameSite=None; Secure`.
  *
- * Only ever a URL. No secret is readable here: anything VITE_-prefixed is
- * inlined into the bundle, which is exactly how the old build leaked its Gemini
- * key to every visitor.
+ * Only ever a URL. Anything VITE_-prefixed is inlined into the bundle and is
+ * therefore public, so no secret can live behind one.
  */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
@@ -124,10 +114,9 @@ export const risk = {
    * Wake the inference service, and wait for it.
    *
    * `?wake=1` makes the API hold the request open for its cold-start window
-   * instead of the 5-second probe window. That distinction is the whole fix:
-   * the probe aborted after 5s while a spun-down container takes ~35s to answer,
-   * so the old "wake-up call" reported the service unreachable at exactly the
-   * moment it was starting, and woke nothing.
+   * rather than the 5-second probe window. The distinction matters: a spun-down
+   * container takes around 35 seconds to answer, so a probe that gives up at 5
+   * reports it unreachable while it is still starting.
    */
   wakeInference: () => request('/api/inference/health?wake=1'),
 };

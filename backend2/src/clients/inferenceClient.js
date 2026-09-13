@@ -1,17 +1,14 @@
 /**
  * Adapter over the Python inference service.
  *
- * Patterns applied: Adapter (translates between this service's vocabulary and
- * the model service's wire format) and Remove Middle Man (the route no longer
- * reaches through to axios itself).
+ * Translates between this service's vocabulary and the model service's wire
+ * format, so routes never reach through to HTTP details themselves and a change
+ * to the model API touches one file.
  *
- * The behaviour this replaces is the single worst defect in v1: apiRoutes.js
- * wrapped the ML call in a try/catch that, on ANY failure, substituted
- * `TG: 150 + Math.random() * 50` and returned HTTP 200. There were three such
- * fallbacks. A caller had no way to distinguish a real prediction from a random
- * number, in a health application.
- *
- * This client throws. It never invents a value.
+ * This client throws rather than substituting a value. Returning a plausible
+ * number when the model is unreachable would leave every caller -- and every
+ * user -- unable to tell an estimate from a guess, which in a health
+ * application is the one failure that matters.
  */
 import axios from 'axios';
 
@@ -119,11 +116,10 @@ export class InferenceClient {
   /**
    * Returns a full risk assessment, or throws. Never a fabricated score.
    *
-   * `history` is what makes trajectories possible. The inference service has
-   * accepted it since the trajectory feature was built, but this client did not
-   * send it -- so every response came back with an empty `trajectories` array
-   * and the risk-over-time feature was unreachable through the API. Caught by
-   * the demo-seeding test asserting that 90 days of history yields trends.
+   * `history` is what makes trajectories possible: the inference service walks
+   * it in 14-day windows. Omitting it is not an error -- the response simply
+   * comes back with an empty `trajectories` array and the risk-over-time
+   * feature silently disappears.
    */
   async assessRisk({ profile, wearableWindow, history, measured }) {
     const data = await this.#post('/predict', {
@@ -134,7 +130,8 @@ export class InferenceClient {
     });
 
     if (!data || !Array.isArray(data.risks) || !data.provenance) {
-      // v1 responded to an unrecognised shape by substituting random numbers.
+      // An unrecognised shape is treated as an outage, not coerced into one:
+      // a response missing `risks` or `provenance` cannot be shown to a user.
       throw new InferenceUnavailableError('Malformed response from inference service');
     }
     return data;

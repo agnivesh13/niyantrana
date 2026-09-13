@@ -1,16 +1,12 @@
 """Biomarker prediction pipeline.
 
-Refactoring applied: **Extract Class** + **Replace Method with Method Object**.
+Orchestration only. Validation belongs to `UserProfile` and `WearableWindow`,
+feature assembly to `FeatureBridge`, and execution to an `InferenceBackend`;
+this class wires them together and checks the shape of what comes back.
 
-`predict_risk` was a single 45-line function that validated input, assembled
-features, scaled them, reshaped for two branches, ran the model and
-inverse-transformed the output -- six responsibilities in one scope, with a
-data-corruption bug hiding in the seam between two of them.
-
-Each responsibility now lives behind its own seam: `UserProfile` /
-`WearableWindow` validate, `FeatureBridge` assembles, `InferenceBackend` runs.
-This class only orchestrates, and is constructor-injected so tests can supply a
-fake backend without touching the filesystem (Dependency Inversion).
+Keeping those responsibilities apart is what makes the seams testable: the
+backend is constructor-injected, so a test can drive the whole pipeline with a
+fake and never touch the filesystem.
 """
 from __future__ import annotations
 
@@ -50,8 +46,9 @@ class BiomarkerPredictor:
                 f"Model returned shape {scaled.shape}, expected (n, {len(self.OUTPUT_ORDER)})"
             )
         if np.isnan(scaled).any():
-            # Previously NaN passed through the ReLUs as zeros and surfaced as a
-            # confident, plausible number. It must be an error.
+            # NaN here would otherwise reach the caller as a confident-looking
+            # number, since downstream arithmetic quietly propagates it. A
+            # prediction that cannot be computed has to fail loudly.
             raise InferenceError("Model produced NaN output")
 
         values = self._target_scaler.inverse_transform(scaled)[0]

@@ -1,14 +1,12 @@
 """Wire-format DTOs.
 
-Refactoring applied: **Extract Class** -- separating transport shape from domain
-shape. The old Flask handler read raw dicts straight out of `request.get_json()`
-and passed them into the model, so a malformed payload surfaced as a KeyError
-deep inside pandas rather than a 400 at the boundary.
+Transport shape is kept separate from domain shape, so a malformed payload is a
+400 at the boundary rather than a KeyError somewhere inside pandas.
 
-These DTOs are deliberately permissive about *names* (the Express backend still
-sends legacy spellings such as `calorie_intake` and `gender`) and strict about
-*types*. Translation to domain objects happens in one place, the `to_domain`
-methods, so the legacy vocabulary cannot leak inward.
+These are deliberately permissive about *names* and strict about *types*: the
+Express backend sends spellings such as `calorie_intake` and `gender`, which the
+domain calls `energy_kcal` and `sex`. Translation happens only in the `to_domain`
+methods, so neither vocabulary leaks into the other.
 """
 from __future__ import annotations
 
@@ -108,9 +106,8 @@ class BiomarkersDTO(BaseModel):
 class AssessmentResponse(BaseModel):
     """Outgoing assessment.
 
-    `provenance` is a required field, not an optional extra. A caller can always
-    tell a real prediction from a fallback -- which was impossible in v1, where
-    three separate layers returned `Math.random()` with HTTP 200.
+    `provenance` is a required field, not an optional extra, so a caller can
+    always tell a model estimate from a clinical formula from a measured value.
     """
 
     risks: list[RiskScoreDTO]

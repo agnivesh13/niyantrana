@@ -1,18 +1,10 @@
 /**
  * Authentication state, backed by real server sessions.
  *
- * Three defects from the previous version are fixed here:
- *
- * 1. **Double-wrapped user on reload.** `checkAuth` did `setUser(response.data)`
- *    while the mock returned `{ data: { user } }`, so after any page refresh
- *    `user` became `{ user: {...} }` and `user.name`, `user.points` and
- *    `user.fattyLiverIndex` were all undefined. The dashboard silently fell
- *    back to defaults on every reload.
- * 2. **Wrong auth shape.** It stored `authToken` / `refreshToken` in
- *    localStorage, but the backend uses Passport **session cookies**. Nothing
- *    was ever sent to a server, and the scaffolding could not have worked.
- * 3. **Any password accepted.** The mock commented "accept any email/password
- *    combination". Credentials are now verified server-side with bcrypt.
+ * Auth is Passport **session cookies**, not bearer tokens: the cookie is
+ * HttpOnly, so this holds no credential of its own and nothing useful is kept
+ * in localStorage. The session is resolved by asking the server, which is also
+ * the only party that can answer.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 

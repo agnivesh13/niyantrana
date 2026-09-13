@@ -1,10 +1,11 @@
 /**
  * Express application assembly.
  *
- * Refactoring applied: Extract Class. server.js previously mixed configuration,
- * database connection, session setup, route definitions and process startup in
- * one 102-line file. Building the app is now separate from running it, which is
- * what makes integration testing possible without binding a port.
+ * Building the app is separate from running it: this module assembles
+ * middleware, session storage and routes and returns an Express instance, while
+ * server.js owns the process. That separation is what lets an integration test
+ * drive the whole API without binding a port or leaking a listener between
+ * suites.
  */
 import MongoStore from 'connect-mongo';
 import cors from 'cors';

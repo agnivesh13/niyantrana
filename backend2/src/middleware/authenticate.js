@@ -1,9 +1,9 @@
 /**
  * Session guard.
  *
- * Refactoring applied: Extract Method. An identical `isAuthenticated` was
- * defined separately in apiRoutes.js and userRoutes.js (Duplicate Code), so the
- * two could drift apart.
+ * One definition of "is this request authenticated", used by every protected
+ * route. Two copies of an access check are two chances for one of them to be
+ * relaxed without the other.
  */
 import config from '../config/env.js';
 import { UnauthorizedError } from '../domain/errors.js';

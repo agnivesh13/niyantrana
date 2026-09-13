@@ -169,7 +169,7 @@ npm run preview     # http://localhost:4173
 
 Both are driven by one OAuth client in the same Google Cloud project. Console
 steps are in
-[MANUAL_CHECKLIST.md](MANUAL_CHECKLIST.md#google-sign-in-and-google-health--console-setup-is-yours);
+[SETUP.md](SETUP.md#google-cloud-console);
 what production needs is:
 
 | Service | Variable | Value |

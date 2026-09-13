@@ -152,12 +152,11 @@ export class GoogleHealthClient {
       // `include_granted_scopes` is deliberately NOT set.
       //
       // It folds every scope the user has ever granted this OAuth client into
-      // the new token. On a client that previously carried the legacy Google
-      // Fit scopes -- which this project's client did, until they were removed
-      // -- those come back in the token and collide with the Health API's
+      // the new token. Where a client has previously held the legacy Google Fit
+      // scopes, those return in the token and collide with the Health API
       // authorization layer, producing a 403 on data reads while identity and
-      // profile reads keep working. We request exactly the three scopes we
-      // read, and nothing else.
+      // profile reads keep working. Requesting exactly the three scopes this
+      // client reads avoids the collision entirely.
       scope: this.scopes,
       state,
     });
