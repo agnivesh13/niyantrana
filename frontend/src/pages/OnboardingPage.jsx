@@ -20,7 +20,7 @@ import apiService from '../services/apiService.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import {
   Alert, Button, Card, CardBody, CardDescription, CardHeader,
-  Disclaimer, Field, Input, Select,
+  Disclaimer, Field, Input, Select, Spinner,
 } from '../ui/primitives.jsx';
 import Wordmark from '../components/Wordmark.jsx';
 
@@ -275,12 +275,17 @@ function GoogleHealthCard({ onSynced }) {
             of which shut down in 2026.
           </p>
         </div>
-        {status.connected ? (
+        {status.connected && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-good-soft px-2.5 py-1 text-xs font-medium text-status-good">
             <Check className="size-3.5" aria-hidden />
             Connected
           </span>
-        ) : null}
+        )}
+        {status.needsReconnect && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning-soft px-2.5 py-1 text-xs font-medium text-[#8a6100]">
+            Reconnect needed
+          </span>
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -308,6 +313,13 @@ function GoogleHealthCard({ onSynced }) {
           </Button>
         )}
       </div>
+
+      {status.needsReconnect && (
+        <p className="mt-3 text-xs leading-relaxed text-[#8a6100]">
+          Google has expired this connection. While the app is in testing it does that
+          every 7 days — connect again to resume syncing. Days already imported are kept.
+        </p>
+      )}
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
         Google classifies every Health API scope as Restricted, so this works for accounts
@@ -443,8 +455,47 @@ function WearableStep({ onDone }) {
 }
 
 export default function OnboardingPage() {
-  const [step, setStep] = useState(1);
+  // null while deciding which step to open on. Rendering step 1 first and then
+  // jumping would flash a form the user has already filled in.
+  const [step, setStep] = useState(null);
   const navigate = useNavigate();
+  const [search] = useSearchParams();
+
+  /**
+   * Open on the step the user actually needs.
+   *
+   * Two reasons this cannot just default to 1:
+   *
+   * 1. **Returning from Google.** The consent flow redirects to
+   *    `/onboarding?google_health=connected`, and the card that reads that
+   *    parameter and starts the sync lives inside step 2. Mounting on step 1
+   *    meant the redirect landed on the profile form, the parameter was never
+   *    read, and a *successful* connection looked like nothing had happened.
+   * 2. **Someone who already has a profile.** Making them retype their height
+   *    and waist to reach the connect button is a toll for no reason.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const returningFromGoogle = search.has('google_health');
+
+    apiService.user.status()
+      .then((status) => {
+        if (!cancelled) setStep(status.canBeAssessed || returningFromGoogle ? 2 : 1);
+      })
+      // A failed status check should not block onboarding; the first step is
+      // the safe assumption, unless Google is sending the user back.
+      .catch(() => { if (!cancelled) setStep(returningFromGoogle ? 2 : 1); });
+
+    return () => { cancelled = true; };
+  }, [search]);
+
+  if (step === null) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-ground">
+        <Spinner label="Loading your profile" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-ground">

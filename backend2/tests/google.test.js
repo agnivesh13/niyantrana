@@ -520,3 +520,69 @@ describe('Inference wake-up call', () => {
     assert.equal(health.reason, 'ECONNABORTED');
   });
 });
+
+/* ------------------------------------------- revoked-grant handling tests */
+
+describe('A grant Google has rejected', () => {
+  const revokedClient = () => ({
+    ...fakeClient(),
+    refresh: async () => {
+      const { GoogleHealthAuthError } = await import('../src/clients/googleHealthClient.js');
+      throw new GoogleHealthAuthError('invalid_grant', { revoked: true });
+    },
+  });
+
+  const flakyClient = () => ({
+    ...fakeClient(),
+    refresh: async () => {
+      const { GoogleHealthAuthError } = await import('../src/clients/googleHealthClient.js');
+      throw new GoogleHealthAuthError('socket hang up', { revoked: false });
+    },
+  });
+
+  const expiredTokens = () => fakeUsers([{
+    id: 'u0',
+    googleHealth: {
+      refreshToken: 'refresh',
+      accessToken: 'stale',
+      expiresAt: new Date(Date.now() - 1000),
+    },
+  }]);
+
+  it('stops reporting as connected once the grant is revoked', async () => {
+    const users = expiredTokens();
+    const service = new GoogleHealthService({ client: revokedClient(), users });
+
+    await assert.rejects(() => service.sync('u0', { days: 7 }));
+
+    // In Testing mode Google expires refresh tokens after 7 days, so this is
+    // the normal weekly state. A "Connected" badge over a dead grant is the UI
+    // asserting something the server knows to be false.
+    const status = await service.status('u0');
+    assert.equal(status.connected, false);
+    assert.equal(status.needsReconnect, true);
+  });
+
+  it('leaves the connection alone when the failure is transient', async () => {
+    const users = expiredTokens();
+    const service = new GoogleHealthService({ client: flakyClient(), users });
+
+    await assert.rejects(() => service.sync('u0', { days: 7 }));
+
+    // A socket hang up says nothing about the tokens. Disconnecting over one
+    // would make the user reconnect for a hiccup.
+    const status = await service.status('u0');
+    assert.equal(status.connected, true);
+    assert.equal(status.needsReconnect, false);
+  });
+
+  it('clears the flag once a reconnection works', async () => {
+    const users = expiredTokens();
+    users.rows[0].googleHealth.needsReconnect = true;
+    const service = new GoogleHealthService({ client: fakeClient(), users });
+
+    await service.sync('u0', { days: 7 });
+    assert.equal(users.rows[0].googleHealth.needsReconnect, false);
+    assert.equal((await service.status('u0')).connected, true);
+  });
+});

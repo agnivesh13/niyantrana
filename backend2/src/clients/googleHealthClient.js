@@ -51,8 +51,17 @@ export class GoogleHealthUnavailableError extends AppError {
 }
 
 export class GoogleHealthAuthError extends AppError {
-  constructor(message = 'Reconnect your Google account to refresh access') {
+  /**
+   * `revoked` separates "this grant is dead" from "this request failed".
+   *
+   * The two want opposite responses: a revoked grant should stop the UI
+   * claiming a working connection, while a network blip should change nothing
+   * and be retried. Treating them alike either strands the user on a dead
+   * "Connected" badge or disconnects them over a hiccup.
+   */
+  constructor(message = 'Reconnect your Google account to refresh access', { revoked = false } = {}) {
     super(message, 401);
+    this.revoked = revoked;
   }
 }
 
@@ -170,10 +179,15 @@ export class GoogleHealthClient {
         refresh_token: client.credentials.refresh_token || refreshToken,
       });
     } catch (error) {
-      // A revoked grant is permanent: the user has to reconnect, and retrying
-      // forever would just log the same failure every sync.
+      // `invalid_grant` is Google saying the refresh token is no longer valid:
+      // the user revoked access, or -- while the app is in Testing mode --
+      // Google expired it, which it does after 7 days. Permanent either way;
+      // retrying forever would just log the same failure every sync.
+      const revoked = /invalid_grant|invalid_token|unauthorized_client/i
+        .test(`${error.message} ${error.response?.data?.error ?? ''}`);
       throw new GoogleHealthAuthError(
         `Google would not refresh the token (${error.message}). Reconnect the account.`,
+        { revoked },
       );
     }
   }

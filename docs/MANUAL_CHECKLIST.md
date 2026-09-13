@@ -443,6 +443,29 @@ the restricted-scope review. Expect:
   Restricted and need the separate security assessment. The onboarding card
   already says so on screen, so this degrades honestly rather than erroring.
 
+### ☐ Keep the app PUBLISHED — do not move it back to Testing
+
+Unpublishing breaks Google sign-in for everyone who is not a test user. In
+Testing mode the consent screen serves only the accounts on that list, for
+**every** scope including basic sign-in, so a visitor gets "Access blocked" and
+has to fall back to email and password.
+
+Published, with the Health scopes unverified:
+
+| | Behaviour |
+|---|---|
+| Sign in with Google | Works for everyone, no warning. `openid`/`email`/`profile` are non-sensitive and do not trigger the unverified-app screen |
+| Connect Google Health | Shows the unverified-app screen, and is capped at 100 users for the lifetime of the project |
+
+**Testing mode also expires refresh tokens after 7 days.** That is Google's
+policy for unverified apps, not a bug, and it means a Health connection made in
+Testing dies weekly. The app handles it honestly rather than pretending
+otherwise: a refresh Google rejects with `invalid_grant` marks the connection
+`needsReconnect`, the badge changes from **Connected** to **Reconnect needed**,
+and the card explains the 7-day expiry. A transient failure — a socket hang-up,
+a timeout — deliberately does *not* do this, because the tokens may well still
+be good and disconnecting over a hiccup is its own bug.
+
 ### ☐ 5. Optional: OAuth verification, for anyone beyond your test users
 
 Only needed if strangers should be able to connect their own health data.

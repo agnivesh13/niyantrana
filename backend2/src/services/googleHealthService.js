@@ -216,9 +216,14 @@ export class GoogleHealthService {
     const user = await this.users.googleHealthTokens(userId);
     if (!user) throw new NotFoundError('User');
     const connection = user.googleHealth;
+    // A stored refresh token that Google has rejected is not a connection.
+    // Showing "Connected" beside one is the same class of lie as a fabricated
+    // score: the UI asserting something the server knows to be false.
+    const needsReconnect = Boolean(connection?.needsReconnect);
     return {
       configured: this.configured,
-      connected: Boolean(connection?.refreshToken),
+      connected: Boolean(connection?.refreshToken) && !needsReconnect,
+      needsReconnect,
       scopes: connection?.scopes ?? [],
       connectedAt: connection?.connectedAt ?? null,
       lastSyncedAt: connection?.lastSyncedAt ?? null,
@@ -238,8 +243,22 @@ export class GoogleHealthService {
       return connection.accessToken;
     }
 
-    const refreshed = await this.client.refresh(connection.refreshToken);
-    await this.users.saveGoogleHealthTokens(userId, refreshed);
+    let refreshed;
+    try {
+      refreshed = await this.client.refresh(connection.refreshToken);
+    } catch (error) {
+      // Only a grant Google has actually rejected marks the connection dead. A
+      // timeout leaves it alone, because the tokens may well still be good.
+      if (error.revoked) {
+        await this.users.saveGoogleHealthTokens(userId, { needsReconnect: true });
+      }
+      throw error;
+    }
+
+    await this.users.saveGoogleHealthTokens(userId, {
+      ...refreshed,
+      needsReconnect: false,
+    });
     return refreshed.accessToken;
   }
 

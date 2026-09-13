@@ -87,6 +87,10 @@ const googleHealthSchema = new mongoose.Schema({
   scopes: { type: [String], default: [] },
   connectedAt: Date,
   lastSyncedAt: Date,
+  // Set when Google rejects the refresh token outright. While the app is in
+  // Testing mode Google expires these after 7 days, so this is a normal weekly
+  // state rather than an exceptional one.
+  needsReconnect: { type: Boolean, default: false },
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
