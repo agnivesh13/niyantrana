@@ -69,6 +69,28 @@ export class UserService {
     };
   }
 
+  /**
+   * Erase the account.
+   *
+   * Guarded by the caller re-stating their own email address. A single click
+   * cannot do this: the request carries a confirmation that only the account
+   * holder can supply, which is the difference between a deliberate deletion
+   * and a misplaced tap on a phone.
+   */
+  async deleteAccount(userId, confirmation) {
+    const user = await this.users.findById(userId);
+    if (!user) throw new NotFoundError('User');
+
+    const given = String(confirmation ?? '').trim().toLowerCase();
+    if (given !== user.email.toLowerCase()) {
+      throw new ValidationError(
+        'To delete your account, confirm by entering your own email address exactly.',
+      );
+    }
+
+    return this.users.deleteAccount(userId);
+  }
+
   async recordWearableData(userId, entries) {
     const list = Array.isArray(entries) ? entries : [entries];
     if (!list.length) throw new ValidationError('No wearable data supplied');

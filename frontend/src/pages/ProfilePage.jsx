@@ -11,12 +11,13 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 import apiService from '../services/apiService.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import {
-  Alert, Button, Card, CardBody, CardDescription, CardHeader, CardTitle, Disclaimer, Skeleton,
+  Alert, Button, Card, CardBody, CardDescription, CardHeader, CardTitle, Disclaimer,
+  Field, Input, Skeleton,
 } from '../ui/primitives.jsx';
 import ProfileForm from '../components/ProfileForm.jsx';
 
@@ -43,6 +44,97 @@ function SourceSummary({ days, sources }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+
+/**
+ * Deleting the account.
+ *
+ * Irreversible and unrecoverable, so it asks the user to type their own email
+ * address rather than accepting a click. The server checks the same thing, so
+ * the guard is not something a modified client can skip -- and the button is
+ * inert until the address matches, which is what keeps a misplaced tap on a
+ * phone from being the end of someone's history.
+ *
+ * This is also what makes the privacy policy true in the app rather than only
+ * by email: it says an account and all its records can be deleted, and here
+ * they are.
+ */
+function DangerZone({ email }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const matches = confirm.trim().toLowerCase() === String(email ?? '').toLowerCase();
+
+  const remove = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await apiService.user.deleteAccount(confirm.trim());
+      // The server has already ended the session; a full navigation clears
+      // every trace of in-memory state rather than leaving a signed-out app
+      // holding the deleted user's data.
+      window.location.assign('/');
+    } catch (requestError) {
+      setError(requestError.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="border-[#f3c0bb]">
+      <CardHeader>
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-status-critical" aria-hidden />
+          <div>
+            <CardTitle>Delete my data</CardTitle>
+            <CardDescription>
+              Removes your account and everything in it — profile, meals, measurements,
+              wearable days, assessments and any connected Google tokens. This cannot be
+              undone.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardBody>
+        {!open ? (
+          <Button variant="danger" onClick={() => setOpen(true)}>Delete my data</Button>
+        ) : (
+          <div className="space-y-4">
+            <Field
+              label={`Type ${email} to confirm`}
+              htmlFor="confirm-delete"
+              hint="Asked for deliberately: there is no undo and no backup to restore from."
+            >
+              <Input
+                id="confirm-delete"
+                autoComplete="off"
+                value={confirm}
+                onChange={(event) => setConfirm(event.target.value)}
+                placeholder={email}
+              />
+            </Field>
+
+            {error && <Alert tone="error">{error}</Alert>}
+
+            <div className="flex flex-wrap gap-3">
+              <Button variant="danger" disabled={!matches} loading={busy} onClick={remove}>
+                Delete everything permanently
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => { setOpen(false); setConfirm(''); setError(null); }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
@@ -142,7 +234,8 @@ export default function ProfilePage() {
               </div>
             </dl>
             <p className="mt-4 text-xs leading-relaxed text-muted">
-              To have your account and all its records deleted, email the address in the{' '}
+              To delete your account and everything in it, use the panel at the bottom of
+              this page. What is stored and why is set out in the{' '}
               <a href="/privacy" className="text-accent hover:underline">privacy policy</a>.
             </p>
           </CardBody>
@@ -161,6 +254,8 @@ export default function ProfilePage() {
           </CardBody>
         </Card>
       </div>
+
+      <DangerZone email={user?.email} />
 
       <Disclaimer />
     </div>

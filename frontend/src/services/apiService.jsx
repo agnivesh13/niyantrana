@@ -85,6 +85,15 @@ export const user = {
   saveProfile: (profile) => request('/api/user/profile', { method: 'POST', body: profile }),
   updateWeight: (weight) => request('/api/user/weight', { method: 'POST', body: { weight } }),
   wearable: (days = 14) => request(`/api/user/wearable?days=${days}`),
+
+  /**
+   * Delete the account and everything attached to it. Irreversible.
+   *
+   * `confirm` must be the account's own email address; the server checks it and
+   * refuses otherwise, so a mis-click cannot reach the delete.
+   */
+  deleteAccount: (confirm) =>
+    request('/api/user/account', { method: 'DELETE', body: { confirm } }),
 };
 
 export const logs = {

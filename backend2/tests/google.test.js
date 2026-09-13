@@ -838,3 +838,58 @@ describe('Heart data from a source that supplies samples, not daily records', ()
     assert.equal(users.rows[0].watchHistory[0].resting_heart_rate, 55);
   });
 });
+
+/* ------------------------------------------------ account deletion tests */
+
+const { UserService } = await import('../src/services/userService.js');
+
+describe('Deleting an account', () => {
+  const store = (email = 'someone@example.com') => {
+    const calls = [];
+    return {
+      calls,
+      findById: async () => ({ id: 'u0', email }),
+      deleteAccount: async (id) => {
+        calls.push(id);
+        return { deleted: true, meals: 12, vitals: 3, wearableDays: 90, assessments: 4 };
+      },
+    };
+  };
+
+  it('refuses without the confirmation', async () => {
+    const users = store();
+    const service = new UserService(users);
+
+    await assert.rejects(() => service.deleteAccount('u0', undefined), ValidationError);
+    await assert.rejects(() => service.deleteAccount('u0', ''), ValidationError);
+    // The guard that makes a misplaced tap on a phone survivable.
+    assert.equal(users.calls.length, 0, 'nothing may be deleted without confirmation');
+  });
+
+  it('refuses when the confirmation is someone else\'s address', async () => {
+    const users = store('someone@example.com');
+    const service = new UserService(users);
+
+    await assert.rejects(() => service.deleteAccount('u0', 'other@example.com'), ValidationError);
+    assert.equal(users.calls.length, 0);
+  });
+
+  it('accepts the account email, case and spacing aside', async () => {
+    const users = store('Someone@Example.com');
+    const service = new UserService(users);
+
+    const result = await service.deleteAccount('u0', '  someone@example.com  ');
+    assert.equal(result.deleted, true);
+    assert.equal(users.calls.length, 1);
+  });
+
+  it('reports what was removed, so the claim is checkable', async () => {
+    const service = new UserService(store());
+    const result = await service.deleteAccount('u0', 'someone@example.com');
+
+    // The privacy policy promises meals, measurements, wearable days and
+    // assessments go with the account. The response says they did.
+    assert.deepEqual(result,
+      { deleted: true, meals: 12, vitals: 3, wearableDays: 90, assessments: 4 });
+  });
+});

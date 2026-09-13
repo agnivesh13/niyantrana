@@ -42,6 +42,8 @@ router.get('/api/user/status', authenticate, asyncHandler(userController.getStat
 router.post('/api/user/profile', authenticate, asyncHandler(userController.saveProfile));
 router.post('/api/user/weight', authenticate, asyncHandler(userController.updateWeight));
 router.get('/api/user/wearable', authenticate, asyncHandler(userController.getWearableData));
+// Irreversible, and the only route that removes data the user did not replace.
+router.delete('/api/user/account', authenticate, asyncHandler(userController.deleteAccount));
 router.post('/api/user/wearable', authenticate, asyncHandler(userController.recordWearableData));
 
 // Food search is authenticated; v1 left it open.

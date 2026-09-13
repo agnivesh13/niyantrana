@@ -36,3 +36,23 @@ export async function searchFood(req, res) {
   }
   res.json({ results: await foodRepository.search(term) });
 }
+
+/**
+ * Delete the account, then end the session.
+ *
+ * The session is destroyed in the same request: leaving a valid cookie pointing
+ * at a deleted user would make every later request a 401 with no explanation,
+ * and the browser would still look signed in.
+ */
+export async function deleteAccount(req, res, next) {
+  const result = await userService.deleteAccount(req.user.id, req.body?.confirm);
+
+  return req.logout((logoutError) => {
+    if (logoutError) return next(logoutError);
+    return req.session.destroy((destroyError) => {
+      if (destroyError) return next(destroyError);
+      res.clearCookie('connect.sid');
+      return res.json({ ...result, signedOut: true });
+    });
+  });
+}

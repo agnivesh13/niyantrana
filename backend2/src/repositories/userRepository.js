@@ -8,7 +8,11 @@
  * layer that could not be tested without a live database. Persistence now sits
  * behind this seam, and swapping the store touches one file.
  */
+import mongoose from 'mongoose';
+
+import MealLog from '../models/MealLog.js';
 import User from '../models/User.js';
+import VitalReading from '../models/VitalReading.js';
 import { exactMatchPattern } from '../domain/text.js';
 
 export class UserRepository {
@@ -139,6 +143,36 @@ export class UserRepository {
    * Wearable days already imported are deliberately kept: they are the user's
    * own history, and silently deleting data on disconnect would be a surprise.
    */
+  /**
+   * Delete an account and everything attached to it.
+   *
+   * Enumerated here rather than left to the caller, because "everything" has to
+   * stay true as collections are added: a deletion that quietly leaves meal
+   * logs behind would make the privacy policy a false statement.
+   *
+   * The profile, wearable history and past assessments are embedded in the user
+   * document, so removing it removes them. Meals and vitals are separate
+   * collections and are deleted explicitly.
+   */
+  async deleteAccount(id) {
+    const userId = new mongoose.Types.ObjectId(String(id));
+    const [meals, vitals] = await Promise.all([
+      MealLog.deleteMany({ user: userId }),
+      VitalReading.deleteMany({ user: userId }),
+    ]);
+    const user = await User.findByIdAndDelete(userId);
+
+    return {
+      deleted: Boolean(user),
+      meals: meals.deletedCount ?? 0,
+      vitals: vitals.deletedCount ?? 0,
+      // Counted before the document went, so the user is told what was removed
+      // rather than just that something was.
+      wearableDays: user?.watchHistory?.length ?? 0,
+      assessments: user?.healthHistory?.length ?? 0,
+    };
+  }
+
   clearGoogleHealth(id) {
     return User.findByIdAndUpdate(id, { $unset: { googleHealth: '' } }, { new: true });
   }
