@@ -280,6 +280,48 @@ you must verify **`agnivesh.dev`**.
 3. Add the TXT record it gives you at your DNS provider, then Verify. A Domain
    property covers every subdomain, including this app's.
 
+**The homepage had the same problem as the policy pages, and it was invisible.**
+
+Measured against the live site, a fetch of `https://niyantrana.agnivesh.dev`
+that does not run JavaScript saw **four words and no link to the privacy
+policy** — because the landing page is a React app. That is almost certainly
+what produced the original rejection: the privacy-policy field pointed at this
+URL, the checker read it, and found nothing.
+
+`index.html` now carries a `<noscript>` block with the app description, the
+purpose for which each Google scope is requested, and links to `/privacy/` and
+`/terms/` — 238 words a crawler can read. A human reviewer still sees the
+rendered page; both are told the same thing. **Redeploy before resubmitting**,
+and confirm:
+
+```bash
+curl -s https://niyantrana.agnivesh.dev/ | grep -c "Why this app requests your data"   # expect 1
+```
+
+**Error 3 (found on the next screen): ten Google Fit scopes must go.**
+
+The consent screen still declares `fitness.activity.read`,
+`fitness.blood_glucose.read`, `fitness.blood_pressure.read`, `fitness.body.read`,
+`fitness.heart_rate.read`, `fitness.body_temperature.read`,
+`fitness.location.read`, `fitness.nutrition.read`,
+`fitness.oxygen_saturation.read` and `fitness.sleep.read` — leftovers from the
+2025 Google Fit attempt. Google refuses them: *"not available for external
+usage"*, because Fit is being turned down. **They are not what this codebase
+requests.** Click **Fix the issue** and remove all ten.
+
+Then, under **Data access → Add or remove scopes**, declare the three this app
+actually uses:
+
+```
+https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
+https://www.googleapis.com/auth/googlehealth.sleep.readonly
+https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly
+```
+
+A scope that is not declared here cannot be granted, so without this the Connect
+Google Health button fails even for test users. Declaring them does keep the app
+in restricted-scope territory — see the note at the end of this section.
+
 **Error 2: "Your privacy policy page does not have sufficient content."**
 
 The cause is visible in the Branding form: the home page, privacy policy and
@@ -289,9 +331,13 @@ which contains no policy. Set them to three distinct URLs:
 | Field | Value |
 |---|---|
 | Application home page | `https://niyantrana.agnivesh.dev` |
-| Application privacy policy link | `https://niyantrana.agnivesh.dev/privacy` |
-| Application Terms of Service link | `https://niyantrana.agnivesh.dev/terms` |
+| Application privacy policy link | `https://niyantrana.agnivesh.dev/privacy/` |
+| Application Terms of Service link | `https://niyantrana.agnivesh.dev/terms/` |
 | Authorised domain 1 | `agnivesh.dev` (already correct) |
+
+**Use the trailing-slash form.** The host serves these as directory indexes, so
+`/privacy` 308-redirects to `/privacy/`. Put the canonical URLs in the console
+and there is nothing for a reviewer's tooling to follow.
 
 **Deploy the new build first**, or those two URLs will 404 and the rejection
 repeats. Then confirm the content is readable **without JavaScript**, which is
@@ -311,7 +357,12 @@ The homepage requirements are also now met in code — the landing page explains
 what Google data is requested and why, and links the privacy policy in its
 footer, both of which Google's homepage rules require.
 
-Then reopen the issues dialog, choose **I have fixed the issues**, and Proceed.
+**Choose "I have fixed the issues", not the appeal.** The appeal path
+("I believe that the issues found are incorrect") asks you to argue the findings
+are wrong — and they are not: the domain genuinely has no verification record
+and the three URLs genuinely pointed at one page. Appealing a correct finding
+spends a review cycle and comes back rejected. Fix first, then request
+re-verification.
 
 **What passing branding does and does not buy you.** Branding verification makes
 your name and logo show on the consent screen and lets you publish. It is *not*

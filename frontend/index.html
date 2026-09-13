@@ -15,6 +15,69 @@
   </head>
   <body>
     <div id="root"></div>
+
+    <!--
+      The same information the rendered page carries, for clients that do not
+      execute JavaScript.
+
+      This is not an afterthought: Google's OAuth homepage requirements say the
+      home page must describe the app's functionality, explain the purpose for
+      which it requests user data, and link the privacy policy. A React app
+      satisfies all three only once it has run. Measured against the live site,
+      a non-JS fetch of this page saw FOUR words and no policy link -- and the
+      first verification attempt, which had the privacy-policy field pointing at
+      this URL, came back as "does not have sufficient content". That is the
+      checker telling us it does not run scripts.
+
+      A human reviewer sees the rendered page; a crawler sees this. Both are
+      told the same thing, which is the only version of this that is honest.
+    -->
+    <noscript>
+      <div style="max-width:44rem;margin:0 auto;padding:2.5rem 1.25rem;font:16px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#202124">
+        <h1 style="font-size:1.75rem;letter-spacing:-.02em;margin:0 0 .5rem">Niyantrana</h1>
+        <p style="color:#5f6368">
+          Niyantrana is a metabolic-health screening tool. It estimates your risk of fatty
+          liver, raised blood pressure, raised blood sugar and type-2 diabetes from body
+          measurements you enter, meals you log, and day-level activity, sleep and
+          heart-rate data from a wearable device — and shows how those estimates move over
+          time. Every score is labelled with where it came from.
+        </p>
+        <p style="color:#5f6368">
+          <strong style="color:#202124">Niyantrana is not a medical device and does not
+          diagnose.</strong> Every score is a screening estimate. Confirm any concern with
+          a clinician and a real blood test.
+        </p>
+
+        <h2 style="font-size:1.1rem;margin:2rem 0 .5rem">Why this app requests your data</h2>
+        <p style="color:#5f6368">
+          <strong style="color:#202124">Signing in with Google</strong> reads your email
+          address and Google account identifier, and nothing else — not your name, not your
+          profile picture. It exists so your health records stay attached to you and
+          separate from everyone else's.
+        </p>
+        <p style="color:#5f6368">
+          <strong style="color:#202124">Connecting Google Health</strong> is optional and
+          read-only. It reads six values per day — steps, active minutes, sleep duration,
+          sleep efficiency, resting heart rate and heart-rate variability — because those
+          are the inputs of the risk models. They are used for nothing else: no
+          advertising, no sale or transfer to third parties, and no human reads them. You
+          can disconnect in the app at any time, or revoke access from your Google account
+          permissions page.
+        </p>
+
+        <h2 style="font-size:1.1rem;margin:2rem 0 .5rem">Policies</h2>
+        <p style="color:#5f6368">
+          <a href="/privacy/" style="color:#1a73e8">Privacy Policy</a> &middot;
+          <a href="/terms/" style="color:#1a73e8">Terms of Service</a> &middot;
+          <a href="mailto:agniveshshaga@gmail.com" style="color:#1a73e8">Contact</a>
+        </p>
+        <p style="color:#80868b;font-size:.875rem;margin-top:2rem">
+          This page needs JavaScript for the interactive app. The information above is the
+          same as the rendered page shows.
+        </p>
+      </div>
+    </noscript>
+
     <script type="module" src="/src/index.jsx"></script>
   </body>
 </html>
