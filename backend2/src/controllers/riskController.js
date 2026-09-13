@@ -28,5 +28,11 @@ export async function recommend(req, res) {
 export async function inferenceHealth(req, res) {
   const wake = ['1', 'true', 'yes'].includes(String(req.query.wake).toLowerCase());
   const health = await inferenceClient.health({ wake });
-  res.status(health.reachable ? 200 : 503).json(health);
+
+  // A wake-up call succeeds when the container is running. A monitoring probe
+  // succeeds only when the models are loaded and scoring. Same endpoint, two
+  // questions, and answering the second one for the first caller is what made
+  // the client abandon a service it had just started.
+  const ok = wake ? Boolean(health.reachable || health.awake) : health.reachable;
+  res.status(ok ? 200 : 503).json(health);
 }

@@ -510,6 +510,46 @@ describe('Inference wake-up call', () => {
     assert.ok(http.timeouts[0] > 34900, 'must outlast a measured cold start');
   });
 
+  it('knocks on a path that needs no models, and accepts a 404', async () => {
+    const paths = [];
+    const http = {
+      get: async (url, options) => {
+        paths.push(url);
+        // The wake path 404s; that still proves the container is listening.
+        if (url.endsWith('/__wake')) {
+          if (options.validateStatus?.(404) !== true) throw new Error('404 rejected');
+          return { status: 404, data: 'Not Found' };
+        }
+        return { data: { status: 'ok' } };
+      },
+    };
+    const client = new InferenceClient({ baseUrl: 'http://ml.test', http });
+
+    const health = await client.health({ wake: true });
+    assert.equal(paths[0], 'http://ml.test/__wake', 'aliveness is asked first');
+    assert.equal(health.awake, true);
+    assert.equal(health.reachable, true);
+  });
+
+  it('reports a woken-but-loading container as awake, not as a failure', async () => {
+    // The real cold-start shape: the container answers, but /health runs a
+    // functional probe that loads a 7 MB model stack and has not finished.
+    const http = {
+      get: async (url) => {
+        if (url.endsWith('/__wake')) return { status: 404, data: '' };
+        throw Object.assign(new Error('timeout'), { code: 'ECONNABORTED' });
+      },
+    };
+    const client = new InferenceClient({ baseUrl: 'http://ml.test', http });
+
+    const health = await client.health({ wake: true });
+    assert.equal(health.awake, true);
+    assert.equal(health.reachable, false);
+    // This is the bit that stops the caller giving up on a service it started:
+    // warming means "ask for a prediction", not "it is down".
+    assert.equal(health.warming, true);
+  });
+
   it('reports unreachable without throwing, and says which URL it tried', async () => {
     const http = spyHttp(() => { throw Object.assign(new Error('timeout'), { code: 'ECONNABORTED' }); });
     const client = new InferenceClient({ baseUrl: 'http://ml.test', http });
@@ -667,5 +707,134 @@ describe('Demo seeding does not destroy real data', () => {
     assert.equal(result.profileReplaced, true);
     assert.equal(row.staticData.age, DEMO_PROFILE.age);
     assert.equal(row.watchHistory.length, 30);
+  });
+});
+
+describe('An account with no Fitbit link', () => {
+  it('reports the cause once, and points at the path that works', async () => {
+    // What every non-Fitbit user gets: HTTP 400 ACCOUNT_NOT_LINKED on each type.
+    const notLinked = () => {
+      const error = new ValidationError(
+        'Google Health rejected the request: The account is not linked to Google Health.',
+        { status: 400, code: 'ACCOUNT_NOT_LINKED' },
+      );
+      return error;
+    };
+    const client = fakeClient({
+      steps: notLinked(),
+      'active-minutes': notLinked(),
+      'active-zone-minutes': notLinked(),
+      sleep: notLinked(),
+      'daily-resting-heart-rate': notLinked(),
+      'daily-heart-rate-variability': notLinked(),
+    });
+    const users = connectedUser();
+
+    const result = await new GoogleHealthService({ client, users }).sync('u0', { days: 7 });
+
+    assert.equal(result.imported, 0);
+    assert.equal(result.accountNotLinked, true);
+    assert.match(result.notice, /no linked Fitbit account/i);
+    assert.match(result.notice, /import a file export/i);
+    // Not a fabricated day anywhere.
+    assert.equal(users.rows[0].watchHistory, undefined);
+  });
+});
+
+describe('A feature the mapping missed', () => {
+  it('reports the fields the response actually carried', async () => {
+    const day = dayOffset(1);
+    // Points arrive, but the value sits at a field name we do not know.
+    const client = fakeClient({
+      'active-minutes': [rollup(day, { activeMinutes: { totalMinutes: '46' } })],
+      'active-zone-minutes': [],
+    });
+    const users = connectedUser();
+
+    const result = await new GoogleHealthService({ client, users }).sync('u0', { days: 7 });
+    const report = result.report.active_minutes;
+
+    assert.equal(report.days, 0);
+    assert.match(report.error, /no value found/i);
+    // The whole point: the report names what to map to, rather than only
+    // saying the mapping failed.
+    assert.ok(report.diagnostics.some((d) => d.observed?.includes('activeMinutes.totalMinutes')),
+      `expected the observed field to be reported, got ${JSON.stringify(report.diagnostics)}`);
+  });
+
+  it('distinguishes an empty data type from a missed field', async () => {
+    const client = fakeClient({ 'active-minutes': [], 'active-zone-minutes': [] });
+    const users = connectedUser();
+
+    const result = await new GoogleHealthService({ client, users }).sync('u0', { days: 7 });
+    // Nothing came back at all -- that is the account, not the mapping.
+    assert.match(result.report.active_minutes.error, /returned no data points/i);
+  });
+});
+
+describe('Heart data from a source that supplies samples, not daily records', () => {
+  const sample = (date, hhmm, value) => ({
+    heartRate: {
+      sampleTime: {
+        civilTime: {
+          date: { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() },
+          time: { hours: hhmm, minutes: 0 },
+        },
+      },
+      beatsPerMinute: value,
+    },
+  });
+
+  it('derives resting heart rate from the daily MINIMUM, never the average', async () => {
+    const day = dayOffset(1);
+    const client = fakeClient({
+      'daily-resting-heart-rate': [],                       // Fitbit-only derivation
+      'heart-rate': [rollup(day, { heartRate: { beatsPerMinuteMin: '58', beatsPerMinuteAvg: '81' } })],
+    });
+    const users = connectedUser();
+
+    const result = await new GoogleHealthService({ client, users }).sync('u0', { days: 7 });
+
+    // 58, not 81: mean daily heart rate is a different physiological quantity,
+    // and the feature was fitted on a resting pulse.
+    assert.equal(users.rows[0].watchHistory[0].resting_heart_rate, 58);
+    assert.match(result.report.resting_heart_rate.derived, /minimum/i);
+  });
+
+  it('averages intraday RMSSD samples per day for HRV', async () => {
+    const day = dayOffset(1);
+    const hrv = (value) => ({
+      heartRateVariability: {
+        sampleTime: {
+          civilTime: {
+            date: { year: day.getUTCFullYear(), month: day.getUTCMonth() + 1, day: day.getUTCDate() },
+          },
+        },
+        rmssd: { value },
+      },
+    });
+    const client = fakeClient({
+      'daily-heart-rate-variability': [],
+      'heart-rate-variability': [hrv(40), hrv(50), hrv(60)],
+    });
+    const users = connectedUser();
+
+    const result = await new GoogleHealthService({ client, users }).sync('u0', { days: 7 });
+
+    assert.equal(users.rows[0].watchHistory[0].heart_rate_variability, 50);
+    // Named, so it is never mistaken for the platform's own daily figure.
+    assert.match(result.report.heart_rate_variability.derived, /intraday/i);
+  });
+
+  it('still prefers the platform daily record when it exists', async () => {
+    const day = dayOffset(1);
+    const client = fakeClient({
+      'daily-resting-heart-rate': [dailyPoint(day, 'dailyRestingHeartRate', { beatsPerMinute: '55' })],
+      'heart-rate': [rollup(day, { heartRate: { beatsPerMinuteMin: '58' } })],
+    });
+    const users = connectedUser();
+
+    await new GoogleHealthService({ client, users }).sync('u0', { days: 7 });
+    assert.equal(users.rows[0].watchHistory[0].resting_heart_rate, 55);
   });
 });

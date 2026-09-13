@@ -159,7 +159,7 @@ Done, so these are off your list:
 | Mobile responsiveness pass | 14 | Checked in a browser at 390px; the nav collapses to icons and the chart drops its label rail and reclaims the width |
 | Bundle-size check | 14 | 24.6 kB gzip entry + 77.7 kB React; the 107.7 kB chart chunk loads only on the dashboard |
 | Render smoke check | — | `npm run smoke` mounts all nine trees through react-dom/server |
-| Cold-start handling | — | `?wake=1` holds a request open for the whole cold-start window (the plain 5s probe aborted 7x too early and woke nothing); landing and sign-in prewarm with it, and a 503 on the dashboard runs up to three wake-and-retry rounds with elapsed seconds shown |
+| Cold-start handling | — | Two-stage wake. `?wake=1` first requests `/__wake`, whose 404 proves the container is listening (0.34s warm), then asks `/health` briefly for readiness. Waking on `/health` alone failed because it runs a functional probe that loads a 7 MB model stack and scores a profile, so a container that HAD woken was scored as a failed wake. Measured cold start: **~40s** to first HTTP response, against a 75s stage-1 budget. The dashboard also fires the wake at t=0 rather than after the first `/predict` fails, which had delayed the boot clock by the API's own 15s+75s budget. Landing and sign-in prewarm too; a 503 still runs up to three wake-and-retry rounds with elapsed seconds shown |
 
 Still yours, because they need accounts or a device:
 

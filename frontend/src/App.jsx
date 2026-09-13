@@ -18,6 +18,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import LogPage from './pages/LogPage.jsx';
 import OnboardingPage from './pages/OnboardingPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import SignInPage from './pages/SignInPage.jsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import { ChatProvider } from './contexts/ChatContext.jsx';
@@ -88,6 +89,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/dashboard', element: <DashboardPage /> },
       { path: '/log', element: <LogPage /> },
+      { path: '/profile', element: <ProfilePage /> },
       { path: '/assistant', element: <AssistantPage /> },
     ],
   },

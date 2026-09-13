@@ -20,6 +20,7 @@ import DashboardPage from './src/pages/DashboardPage.jsx';
 import LandingPage from './src/pages/LandingPage.jsx';
 import LogPage from './src/pages/LogPage.jsx';
 import OnboardingPage from './src/pages/OnboardingPage.jsx';
+import ProfilePage from './src/pages/ProfilePage.jsx';
 import SignInPage from './src/pages/SignInPage.jsx';
 import RiskCard from './src/components/RiskCard.jsx';
 import TrajectoryChart from './src/components/TrajectoryChart.jsx';
@@ -65,6 +66,7 @@ const screens = {
   OnboardingPage: <OnboardingPage />,
   DashboardPage: <DashboardPage />,
   LogPage: <LogPage />,
+  ProfilePage: <ProfilePage />,
   AssistantPage: <AssistantPage />,
   RiskCard: <RiskCard risk={RISK} />,
   TrajectoryChart: <TrajectoryChart trajectories={TRAJECTORIES} historyDays={90} />,

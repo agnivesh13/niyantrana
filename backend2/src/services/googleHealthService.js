@@ -97,6 +97,28 @@ const DAILY_FEATURES = [
     // Documented exactly.
     candidates: ['dailyRestingHeartRate.beatsPerMinute'],
     valueField: 'dailyRestingHeartRate',
+    /**
+     * Fall back to the daily MINIMUM of intraday heart rate.
+     *
+     * `daily-resting-heart-rate` is a value Fitbit's backend derives overnight.
+     * A Samsung Health account feeds raw samples into Google Health and no such
+     * daily record is produced, so the field is empty while the phone quite
+     * visibly shows heart-rate data -- it is simply a different data type.
+     *
+     * The daily minimum is a defensible proxy for resting pulse, and it is the
+     * quantity the model was fitted on (NHANES measures a resting pulse).
+     * **Average is deliberately not accepted**: mean daily heart rate is a
+     * different physiological quantity, and feeding it to a feature named
+     * `resting_heart_rate` would be wrong in a way no error would reveal.
+     */
+    rollupFallback: {
+      dataType: 'heart-rate',
+      candidates: [
+        'heartRate.beatsPerMinuteMin', 'heartRate.minimum', 'heartRate.min',
+        'heartRate.beatsPerMinuteMinimum', 'heartRate.restingBeatsPerMinute',
+      ],
+      derived: 'daily minimum of intraday heart rate',
+    },
   },
   {
     field: 'heart_rate_variability',
@@ -114,6 +136,26 @@ const DAILY_FEATURES = [
       'dailyHeartRateVariability.averageHeartRateVariabilityMilliseconds',
     ],
     valueField: 'dailyHeartRateVariability',
+    /**
+     * Fall back to intraday HRV samples, averaged per day.
+     *
+     * Same cause as resting heart rate: the daily record is a derivation the
+     * Fitbit backend performs, while a Samsung source supplies samples. The
+     * intraday type carries RMSSD in milliseconds, which is the same statistic
+     * the feature was trained on -- only over a different window, and the report
+     * says so.
+     */
+    listFallback: {
+      dataType: 'heart-rate-variability',
+      valueField: 'heartRateVariability',
+      candidates: [
+        'heartRateVariability.rmssd.value',
+        'heartRateVariability.rootMeanSquareOfSuccessiveDifferencesMilliseconds',
+        'heartRateVariability.rmssd',
+      ],
+      aggregate: 'mean',
+      derived: 'daily mean of intraday RMSSD samples',
+    },
   },
 ];
 
@@ -162,6 +204,37 @@ function civilDateIn(node) {
  */
 function dateOf(point, valueField) {
   return civilDateIn(point) ?? civilDateIn(valueField ? point?.[valueField] : null);
+}
+
+const TIME_KEYS = new Set([
+  'civilStartTime', 'civilEndTime', 'sampleTime', 'interval', 'name', 'dataSource',
+  'createTime', 'updateTime', 'startTime', 'endTime',
+]);
+
+/**
+ * The value fields a response actually carried.
+ *
+ * "No value found at any known field path" says the mapping missed; it does not
+ * say what to map to. Reporting the observed keys turns one more sync into the
+ * answer, which matters because the published reference names some of these
+ * fields and describes others only as "interval data" -- so the real response is
+ * the only authority.
+ */
+function observedFields(points, limit = 3) {
+  const seen = new Set();
+  for (const point of points.slice(0, limit)) {
+    for (const [key, value] of Object.entries(point ?? {})) {
+      if (TIME_KEYS.has(key)) continue;
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        for (const sub of Object.keys(value)) {
+          if (!TIME_KEYS.has(sub)) seen.add(`${key}.${sub}`);
+        }
+      } else {
+        seen.add(key);
+      }
+    }
+  }
+  return [...seen].slice(0, 12);
 }
 
 export class GoogleHealthService {
@@ -292,21 +365,59 @@ export class GoogleHealthService {
     }
 
     for (const feature of DAILY_FEATURES) {
-      report[feature.field] = await this.#collectDaily(
-        accessToken, feature, start, end, record);
+      let entry = await this.#collectDaily(accessToken, feature, start, end, record);
+
+      // The daily record is a Fitbit-backend derivation. When the account
+      // supplies raw samples instead -- as a Samsung Health source does -- the
+      // same quantity has to be derived here, from the intraday type.
+      if (entry.days === 0 && feature.rollupFallback) {
+        const fallback = await this.#collectRollUp(
+          accessToken,
+          { field: feature.field, ...feature.rollupFallback },
+          start, end, record,
+        );
+        if (fallback.days > 0) {
+          entry = { ...fallback, derived: feature.rollupFallback.derived };
+        }
+      }
+      if (entry.days === 0 && feature.listFallback) {
+        const fallback = await this.#collectSamples(
+          accessToken, feature.field, feature.listFallback, start, end, record);
+        if (fallback.days > 0) entry = fallback;
+      }
+
+      report[feature.field] = entry;
     }
 
     report.sleep = await this.#collectSleep(accessToken, start, end, record);
 
     const entries = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+    /**
+     * One cause, said once.
+     *
+     * `ACCOUNT_NOT_LINKED` is the single most likely outcome for a user outside
+     * the Fitbit ecosystem, and it is not a fault in the request: the Google
+     * Health API serves data from a Fitbit-linked Google account and from
+     * nothing else. Data held in Google Fit, Health Connect or Samsung Health
+     * is a different store the API cannot reach. Repeating the raw rejection
+     * once per feature reads as six failures instead of one fact.
+     */
+    const notLinked = Object.values(report)
+      .some((entry) => entry?.code === 'ACCOUNT_NOT_LINKED');
+
     if (!entries.length) {
       return {
         imported: 0,
         report,
-        // Said plainly: an empty sync is usually an account with no device data,
-        // not a broken integration.
-        notice: 'Google Health returned no data for this period. If the account has no '
-          + 'paired device, add data in the Google Health app or import a file export.',
+        accountNotLinked: notLinked,
+        notice: notLinked
+          ? 'This Google account has no linked Fitbit account, and the Google Health API '
+            + 'only serves Fitbit-linked accounts. Data in Google Fit, Health Connect or '
+            + 'Samsung Health is a separate store it cannot read. Import a file export '
+            + 'instead -- that path reads all of them.'
+          : 'Google Health returned no data for this period. If the account has no '
+            + 'paired device, add data in the Google Health app or import a file export.',
       };
     }
 
@@ -327,6 +438,7 @@ export class GoogleHealthService {
       { dataType: feature.dataType, candidates: feature.candidates },
       ...(feature.fallback ? [feature.fallback] : []),
     ];
+    const diagnostics = [];
 
     for (const attempt of attempts) {
       let points;
@@ -336,7 +448,12 @@ export class GoogleHealthService {
         if (error instanceof GoogleHealthAuthError) throw error;
         // A data type this account cannot serve is a gap, not a failure: the
         // remaining five features are still worth collecting.
-        return { days: 0, dataType: attempt.dataType, error: error.message };
+        return {
+          days: 0,
+          dataType: attempt.dataType,
+          error: error.message,
+          code: error.details?.code,
+        };
       }
 
       let days = 0;
@@ -349,12 +466,27 @@ export class GoogleHealthService {
         days += 1;
       }
       if (days > 0) return { days, dataType: attempt.dataType, path: resolvedPath };
+
+      // Points came back but none held a number at a path we know. Record what
+      // they DID hold, so the mapping can be corrected from evidence.
+      if (points.length) {
+        diagnostics.push({
+          dataType: attempt.dataType,
+          points: points.length,
+          observed: observedFields(points),
+        });
+      } else {
+        diagnostics.push({ dataType: attempt.dataType, points: 0 });
+      }
     }
 
     return {
       days: 0,
       dataType: feature.dataType,
-      error: 'no value found at any known field path',
+      error: diagnostics.some((d) => d.points > 0)
+        ? 'no value found at any known field path'
+        : 'the API returned no data points for this type',
+      diagnostics,
     };
   }
 
@@ -368,7 +500,12 @@ export class GoogleHealthService {
       });
     } catch (error) {
       if (error instanceof GoogleHealthAuthError) throw error;
-      return { days: 0, dataType: feature.dataType, error: error.message };
+      return {
+        days: 0,
+        dataType: feature.dataType,
+        error: error.message,
+        code: error.details?.code,
+      };
     }
 
     const from = civilDate(start);
@@ -392,6 +529,70 @@ export class GoogleHealthService {
       dataType: feature.dataType,
       path: resolvedPath,
       filtered: Boolean(result.filter),
+      // Distinguishes "this account has no such data" from "we looked in the
+      // wrong place". Both show as zero days; only one is ours to fix.
+      ...(days === 0 && {
+        points: result.points.length,
+        observed: observedFields(result.points),
+        error: result.points.length
+          ? 'no value found at any known field path'
+          : 'the API returned no data points for this type',
+      }),
+    };
+  }
+
+  /**
+   * Intraday samples, aggregated into one value per day.
+   *
+   * Used when a daily record the API would normally derive is absent. The
+   * aggregation is named in the report so the number is never mistaken for the
+   * platform's own daily figure -- it is ours, computed from samples, and the
+   * difference matters when comparing against a Fitbit-sourced account.
+   */
+  async #collectSamples(accessToken, field, spec, start, end, record) {
+    let result;
+    try {
+      result = await this.client.listDataPoints(accessToken, spec.dataType, start, end, {
+        filterCandidates: filterCandidatesFor(
+          spec.valueField.replace(/([A-Z])/g, (m) => `_${m.toLowerCase()}`)),
+      });
+    } catch (error) {
+      if (error instanceof GoogleHealthAuthError) throw error;
+      return { days: 0, dataType: spec.dataType, error: error.message };
+    }
+
+    const from = civilDate(start);
+    const to = civilDate(end);
+    const perDay = new Map();
+    let resolvedPath = null;
+
+    for (const point of result.points) {
+      const date = dateOf(point, spec.valueField);
+      if (!date || date < from || date > to) continue;
+      const { value, path } = resolve(point, spec.candidates);
+      if (value === null) continue;
+      resolvedPath = resolvedPath ?? path;
+      const bucket = perDay.get(date) ?? [];
+      bucket.push(value);
+      perDay.set(date, bucket);
+    }
+
+    for (const [date, values] of perDay) {
+      const aggregated = spec.aggregate === 'min'
+        ? Math.min(...values)
+        : values.reduce((total, value) => total + value, 0) / values.length;
+      record(date, field, Number(aggregated.toFixed(2)));
+    }
+
+    return {
+      days: perDay.size,
+      dataType: spec.dataType,
+      path: resolvedPath,
+      derived: spec.derived,
+      ...(perDay.size === 0 && {
+        points: result.points.length,
+        observed: observedFields(result.points),
+      }),
     };
   }
 
@@ -412,7 +613,12 @@ export class GoogleHealthService {
       });
     } catch (error) {
       if (error instanceof GoogleHealthAuthError) throw error;
-      return { days: 0, dataType: 'sleep', error: error.message };
+      return {
+        days: 0,
+        dataType: 'sleep',
+        error: error.message,
+        code: error.details?.code,
+      };
     }
 
     const from = civilDate(start);
@@ -457,6 +663,10 @@ export class GoogleHealthService {
       dataType: 'sleep',
       derived: 'hours from stages; efficiency = asleep / in bed',
       filtered: Boolean(result.filter),
+      ...(perDay.size === 0 && {
+        points: result.points.length,
+        observed: observedFields(result.points),
+      }),
     };
   }
 }

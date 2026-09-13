@@ -21,6 +21,21 @@ import { InferenceUnavailableError, ValidationError } from '../domain/errors.js'
 /** A monitoring probe has to answer quickly or be treated as down. */
 const HEALTH_PROBE_TIMEOUT_MS = 5000;
 
+/**
+ * A path that exists only to be requested.
+ *
+ * Any HTTP status -- 404 included -- proves the container is listening, which
+ * is the only thing a wake-up call needs to establish. `/health` cannot serve
+ * that purpose: it runs a functional probe that loads the model stack and
+ * scores a profile, so on a cold start it answers only after boot AND import
+ * AND a 7 MB joblib load. Waiting for readiness when you only need aliveness is
+ * what made a woken container look like a failed wake.
+ */
+const WAKE_PATH = '/__wake';
+
+/** Once the container is up, readiness is a short question. */
+const WARM_PROBE_TIMEOUT_MS = 20000;
+
 export class InferenceClient {
   constructor({ baseUrl = config.inferenceServiceUrl,
                 timeout = config.inferenceTimeoutMs,
@@ -143,20 +158,49 @@ export class InferenceClient {
    * you ran curl": curl held the request open for two minutes, the browser gave
    * up after five seconds, and nothing in the UI tried again.
    */
+  /**
+   * Knock on the door and wait for any answer.
+   *
+   * Deliberately accepts every status code: a 404 from the wake path means
+   * uvicorn is serving, which is exactly what is being asked.
+   */
+  async #knock() {
+    try {
+      await this.http.get(`${this.baseUrl}${WAKE_PATH}`, {
+        timeout: this.coldStartTimeout,
+        validateStatus: () => true,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async health({ wake = false } = {}) {
-    const timeout = wake ? this.coldStartTimeout : HEALTH_PROBE_TIMEOUT_MS;
+    // Waking is two questions, not one: is the container listening, and are the
+    // models loaded. Conflating them meant a container that had woken but was
+    // still loading counted as a failed wake, and the caller gave up on a
+    // service that was seconds from ready.
+    const awake = wake ? await this.#knock() : undefined;
+    const timeout = wake ? WARM_PROBE_TIMEOUT_MS : HEALTH_PROBE_TIMEOUT_MS;
+
     // The URL is always reported. Diagnosing the production ENOTFOUND took an
     // extra round trip purely because this returned {reachable:false, reason}
     // without saying which address it had tried.
     try {
       const { data } = await this.http.get(`${this.baseUrl}/health`, { timeout });
-      return { reachable: true, url: this.baseUrl, waited: wake, ...data };
+      return { reachable: true, url: this.baseUrl, waited: wake, awake, ...data };
     } catch (error) {
       return {
         reachable: false,
         url: this.baseUrl,
         reason: error.code || error.message,
         waited: wake,
+        awake,
+        // Up, but still loading its models. The caller should go ahead and ask
+        // for a prediction rather than count this as a failure -- /predict has
+        // its own cold-start budget and the container is already running.
+        warming: Boolean(awake),
         hint: error.code === 'ENOTFOUND'
           ? 'The hostname does not resolve. On Render, `fromService property: host` '
             + 'yields a PRIVATE network name, which free web services cannot reach. '

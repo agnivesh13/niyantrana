@@ -22,26 +22,10 @@ import {
   Alert, Button, Card, CardBody, CardDescription, CardHeader,
   Disclaimer, Field, Input, Select, Spinner,
 } from '../ui/primitives.jsx';
+import ProfileForm from '../components/ProfileForm.jsx';
 import Wordmark from '../components/Wordmark.jsx';
 
 const DEMO_DAYS = 90;
-
-// Mirrors the server-side schema ranges, so a value this form accepts is a
-// value the server accepts. Duplicated deliberately: client-side limits are a
-// convenience, and the server validates independently.
-const PROFILE_FIELDS = [
-  { name: 'age', label: 'Age', unit: 'years', min: 18, max: 120 },
-  { name: 'height', label: 'Height', unit: 'cm', min: 50, max: 260 },
-  { name: 'weight', label: 'Weight', unit: 'kg', min: 20, max: 400 },
-  {
-    name: 'waist',
-    label: 'Waist',
-    unit: 'cm',
-    min: 30,
-    max: 250,
-    hint: 'Measured at the navel. Waist drives the fatty-liver estimate more than weight does.',
-  },
-];
 
 function StepHeader({ step, current, title }) {
   const done = current > step;
@@ -65,143 +49,10 @@ function StepHeader({ step, current, title }) {
   );
 }
 
-function ProfileStep({ onDone, initial }) {
-  const { saveProfile } = useAuth();
-  // Prefilled from what is stored, so correcting one field does not mean
-  // retyping all eight -- and so a profile that is not yours is visible as
-  // soon as you open the form.
-  const [values, setValues] = useState(() => ({
-    age: initial?.age ?? '',
-    height: initial?.height ?? '',
-    weight: initial?.weight ?? '',
-    waist: initial?.waist ?? '',
-    gender: initial?.gender ?? 'M',
-    has_hereditary_risk: String(Boolean(initial?.has_hereditary_risk)),
-    alcohol_drinks_week: initial?.alcohol_drinks_week ?? '0',
-    smoking_status: String(initial?.smoking_status ?? '0'),
-  }));
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  const set = (name) => (event) => setValues((v) => ({ ...v, [name]: event.target.value }));
-
-  const submit = async (event) => {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
-    const result = await saveProfile({
-      age: Number(values.age),
-      height: Number(values.height),
-      weight: Number(values.weight),
-      waist: Number(values.waist),
-      gender: values.gender,
-      has_hereditary_risk: values.has_hereditary_risk === 'true',
-      alcohol_drinks_week: Number(values.alcohol_drinks_week),
-      smoking_status: Number(values.smoking_status),
-    });
-    setBusy(false);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    onDone();
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-5">
-      <div className="grid gap-5 sm:grid-cols-2">
-        {PROFILE_FIELDS.map((field) => (
-          <Field key={field.name} label={`${field.label} (${field.unit})`} htmlFor={field.name} hint={field.hint}>
-            <Input
-              id={field.name}
-              type="number"
-              inputMode="numeric"
-              required
-              min={field.min}
-              max={field.max}
-              step="any"
-              value={values[field.name]}
-              onChange={set(field.name)}
-            />
-          </Field>
-        ))}
-
-        <Field label="Sex" htmlFor="gender" hint="Used by the model, which was fitted with it.">
-          <Select id="gender" value={values.gender} onChange={set('gender')}>
-            <option value="M">Male</option>
-            <option value="F">Female</option>
-          </Select>
-        </Field>
-
-        <Field
-          label="Family history of diabetes or liver disease"
-          htmlFor="has_hereditary_risk"
-        >
-          <Select
-            id="has_hereditary_risk"
-            value={values.has_hereditary_risk}
-            onChange={set('has_hereditary_risk')}
-          >
-            <option value="false">No</option>
-            <option value="true">Yes</option>
-          </Select>
-        </Field>
-
-        <Field
-          label="Alcohol"
-          htmlFor="alcohol_drinks_week"
-          hint="Drinks per week. A major driver of liver enzymes."
-        >
-          <Input
-            id="alcohol_drinks_week"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={100}
-            value={values.alcohol_drinks_week}
-            onChange={set('alcohol_drinks_week')}
-          />
-        </Field>
-
-        <Field label="Smoking" htmlFor="smoking_status">
-          <Select id="smoking_status" value={values.smoking_status} onChange={set('smoking_status')}>
-            <option value="0">Never</option>
-            <option value="1">Former</option>
-            <option value="2">Current</option>
-          </Select>
-        </Field>
-      </div>
-
-      {error && <Alert tone="error">{error}</Alert>}
-
-      <Button type="submit" loading={busy}>Save and continue</Button>
-    </form>
-  );
-}
-
-/**
- * What each failure from the consent flow actually means.
- *
- * Written as causes rather than symptoms: every one of these has a specific
- * fix, and "Google access was not granted" — the single message this replaces —
- * sent you looking in the wrong place for three of the four.
- */
-const OUTCOME_MESSAGE = {
-  denied: (reason) => (reason === 'access_denied'
-    ? 'You declined the permission request, so nothing was connected.'
-    : `Google did not complete the connection${reason ? ` (${reason})` : ''}.`),
-  unconfigured: () => 'This server has no Google client secret configured, so the '
-    + 'connection cannot be completed. The file import below still works.',
-  state_mismatch: () => 'That sign-in did not match this browser session — usually a '
-    + 'stale tab or a session that expired mid-flow. Try connecting again.',
-  session_error: () => 'The session could not be saved before redirecting. Try again.',
-  bad_redirect_uri: () => 'This server is configured with a localhost callback URL, so '
-    + 'Google cannot send you back. GOOGLE_HEALTH_REDIRECT_URI needs the public API '
-    + 'address.',
-  failed: (reason) => `Google refused the connection${reason ? `: ${reason}` : ''}.`,
-  signin_required: () => 'Sign in first, then connect Google Health.',
-};
+/** Field names a feature's response carried, from either report shape. */
+const observedOf = (detail) => (detail?.observed
+  ?? detail?.diagnostics?.flatMap((d) => d.observed ?? [])
+  ?? []);
 
 /**
  * Connect Google Health.
@@ -347,19 +198,38 @@ function GoogleHealthCard({ onSynced }) {
           <p className="text-xs font-medium text-primary">
             {report.imported > 0
               ? `${report.imported} days merged (${report.range?.from} to ${report.range?.to})`
-              : 'No days returned'}
+              : report.accountNotLinked
+                ? 'This account has no Fitbit link'
+                : 'No days returned'}
           </p>
           {report.notice && <p className="mt-1 text-xs text-secondary">{report.notice}</p>}
-          <ul className="mt-2 space-y-0.5">
-            {Object.entries(report.report ?? {}).map(([feature, detail]) => (
-              <li key={feature} className="flex justify-between gap-3 text-[11px]">
-                <span className="text-secondary">{feature.replace(/_/g, ' ')}</span>
-                <span className={detail.days > 0 ? 'text-status-good' : 'text-muted'}>
-                  {detail.days > 0 ? `${detail.days} days` : (detail.error ?? 'none')}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {!report.accountNotLinked && (
+            <ul className="mt-2 space-y-0.5">
+              {Object.entries(report.report ?? {}).map(([feature, detail]) => (
+                <li key={feature} className="text-[11px]">
+                  <span className="flex justify-between gap-3">
+                    <span className="text-secondary">{feature.replace(/_/g, ' ')}</span>
+                    <span className={detail.days > 0 ? 'text-status-good' : 'text-muted'}>
+                      {detail.days > 0 ? `${detail.days} days` : (detail.error ?? 'none')}
+                    </span>
+                  </span>
+                  {/* Say when a value was derived here rather than read from a
+                      platform daily record -- the two are not the same number. */}
+                  {detail.derived && (
+                    <span className="block text-[10px] text-muted">{detail.derived}</span>
+                  )}
+                  {/* The field names the response actually carried. "No value
+                      found" says the mapping missed without saying what to map
+                      to, and the real response is the only authority on that. */}
+                  {observedOf(detail).length > 0 && (
+                    <span className="mt-0.5 block break-all font-mono text-[10px] text-muted">
+                      sent: {observedOf(detail).join(', ')}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
@@ -573,7 +443,8 @@ export default function OnboardingPage() {
             </CardHeader>
             {step === 1 && (
               <CardBody>
-                <ProfileStep initial={profile} onDone={() => setStep(2)} />
+                <ProfileForm initial={profile} submitLabel="Save and continue"
+                  onSaved={() => setStep(2)} />
               </CardBody>
             )}
           </Card>

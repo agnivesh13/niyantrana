@@ -149,7 +149,15 @@ export class GoogleHealthClient {
     return this.#oauth().generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
-      include_granted_scopes: true,
+      // `include_granted_scopes` is deliberately NOT set.
+      //
+      // It folds every scope the user has ever granted this OAuth client into
+      // the new token. On a client that previously carried the legacy Google
+      // Fit scopes -- which this project's client did, until they were removed
+      // -- those come back in the token and collide with the Health API's
+      // authorization layer, producing a 403 on data reads while identity and
+      // profile reads keep working. We request exactly the three scopes we
+      // read, and nothing else.
       scope: this.scopes,
       state,
     });
@@ -230,10 +238,20 @@ export class GoogleHealthClient {
         );
       }
       if (status >= 400 && status < 500) {
-        const detail = error.response?.data?.error?.message || error.message;
+        const body = error.response?.data?.error ?? {};
+        const detail = body.message || error.message;
+
+        // ACCOUNT_NOT_LINKED is not a fault in the request: it means this
+        // Google account has no Fitbit account behind it, and the Health API
+        // serves nothing else. Flagged so the caller can say that once, clearly,
+        // instead of repeating an opaque rejection for all six features.
+        const notLinked = body.status === 'ACCOUNT_NOT_LINKED'
+          || /not linked/i.test(detail);
+
         throw new ValidationError(`Google Health rejected the request: ${detail}`, {
           status,
           path,
+          code: notLinked ? 'ACCOUNT_NOT_LINKED' : body.status,
         });
       }
       throw new GoogleHealthUnavailableError(error.code || error.message);

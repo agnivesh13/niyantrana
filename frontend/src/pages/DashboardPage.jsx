@@ -313,6 +313,22 @@ export default function DashboardPage() {
 
     let ticker;
     try {
+      /**
+       * Start the container booting now, not in ninety seconds.
+       *
+       * Measured cold start is ~40s from request to first HTTP response. The
+       * first `/predict` carries the API's own budget -- 15s, then one 75s
+       * retry -- so on a cold start the sequence used to be: wait 90 seconds
+       * for that to fail, and only THEN send the first wake-up call. The boot
+       * clock started a minute and a half late.
+       *
+       * Fired without awaiting: warm, it costs a 0.3s request nobody waits on;
+       * cold, the container is already starting while the first prediction
+       * attempt is in flight, so the API's own retry tends to land on a live
+       * service instead of a sleeping one.
+       */
+      apiService.risk.wakeInference().catch(() => null);
+
       try {
         setAssessment(await apiService.risk.assess());
         return;

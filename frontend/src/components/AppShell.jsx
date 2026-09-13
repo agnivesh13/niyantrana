@@ -7,7 +7,7 @@
  * glassmorphic blur, a bottom tab bar and a floating launcher all at once.
  */
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Activity, LogOut, MessageCircle, NotebookPen } from 'lucide-react';
+import { Activity, LogOut, MessageCircle, NotebookPen, User } from 'lucide-react';
 
 import { cn } from '../lib/utils.js';
 import { Button, Disclaimer } from '../ui/primitives.jsx';
@@ -18,6 +18,9 @@ const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: Activity },
   { to: '/log', label: 'Log', icon: NotebookPen },
   { to: '/assistant', label: 'Assistant', icon: MessageCircle },
+  // Fourth item, because the profile had no route at all: once set, the
+  // values the model scores you on could not be seen or corrected.
+  { to: '/profile', label: 'Profile', icon: User },
 ];
 
 /**
