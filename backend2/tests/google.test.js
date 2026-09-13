@@ -586,3 +586,86 @@ describe('A grant Google has rejected', () => {
     assert.equal((await service.status('u0')).connected, true);
   });
 });
+
+/* ------------------------------------------- demo seeding safety tests */
+
+const { DemoDataService, DEMO_PROFILE } = await import('../src/services/demoDataService.js');
+
+describe('Demo seeding does not destroy real data', () => {
+  const account = (overrides = {}) => {
+    const row = {
+      id: 'u0',
+      staticData: { age: 32, height: 168, weight: 61, gender: 'F', waist: 74 },
+      watchHistory: [],
+      canBeAssessed: () => Boolean(row.staticData?.age && row.staticData?.waist),
+      ...overrides,
+    };
+    return row;
+  };
+
+  const store = (row) => ({
+    row,
+    findById: async () => row,
+    updateStaticData: async (_id, data) => { row.staticData = data; return row; },
+    replaceWatchData: async (_id, entries) => { row.watchHistory = entries; return row; },
+  });
+
+  const service = (row) => {
+    const users = store(row);
+    return {
+      users,
+      service: new DemoDataService({ users, logs: { logMeal: async () => ({}) } }),
+    };
+  };
+
+  it('refuses to overwrite imported real wearable days', async () => {
+    const row = account({
+      watchHistory: [
+        { date: '2026-09-01', source: 'google_health', daily_steps: 8000 },
+        { date: '2026-09-02', source: 'import', daily_steps: 7000 },
+      ],
+    });
+    const { service: demo } = service(row);
+
+    await assert.rejects(
+      () => demo.seed('u0', { days: 30 }),
+      (error) => error.statusCode === 400 && error.details.requiresForce === true,
+    );
+    assert.equal(row.watchHistory.length, 2, 'real days must survive the refusal');
+  });
+
+  it('keeps a real profile, so the scores are the user own', async () => {
+    const row = account({
+      watchHistory: [{ date: '2026-09-01', source: 'demo', daily_steps: 5000 }],
+    });
+    const { service: demo } = service(row);
+
+    const result = await demo.seed('u0', { days: 30, mealDays: 0 });
+    assert.equal(result.profileReplaced, false);
+    assert.equal(row.staticData.age, 32, 'the user own measurements must not be replaced');
+    assert.match(result.notice, /your own profile was kept/i);
+  });
+
+  it('applies the demo persona only when there is no profile to lose', async () => {
+    const row = account({ staticData: {} });
+    const { service: demo } = service(row);
+
+    const result = await demo.seed('u0', { days: 30, mealDays: 0 });
+    assert.equal(result.profileReplaced, true);
+    assert.equal(row.staticData.age, DEMO_PROFILE.age);
+    // The reason every demo account shows identical scores, said out loud.
+    assert.match(result.notice, /identical on every demo account/i);
+  });
+
+  it('overwrites everything when the overwrite is confirmed', async () => {
+    const row = account({
+      watchHistory: [{ date: '2026-09-01', source: 'google_health', daily_steps: 8000 }],
+    });
+    const { service: demo } = service(row);
+
+    const result = await demo.seed('u0', { days: 30, mealDays: 0, force: true });
+    assert.equal(result.profileReplaced, true);
+    assert.equal(row.staticData.age, DEMO_PROFILE.age);
+    assert.equal(row.watchHistory.length, 30);
+  });
+});

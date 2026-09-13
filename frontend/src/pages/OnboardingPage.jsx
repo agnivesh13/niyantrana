@@ -65,12 +65,21 @@ function StepHeader({ step, current, title }) {
   );
 }
 
-function ProfileStep({ onDone }) {
+function ProfileStep({ onDone, initial }) {
   const { saveProfile } = useAuth();
-  const [values, setValues] = useState({
-    age: '', height: '', weight: '', waist: '',
-    gender: 'M', has_hereditary_risk: 'false', alcohol_drinks_week: '0', smoking_status: '0',
-  });
+  // Prefilled from what is stored, so correcting one field does not mean
+  // retyping all eight -- and so a profile that is not yours is visible as
+  // soon as you open the form.
+  const [values, setValues] = useState(() => ({
+    age: initial?.age ?? '',
+    height: initial?.height ?? '',
+    weight: initial?.weight ?? '',
+    waist: initial?.waist ?? '',
+    gender: initial?.gender ?? 'M',
+    has_hereditary_risk: String(Boolean(initial?.has_hereditary_risk)),
+    alcohol_drinks_week: initial?.alcohol_drinks_week ?? '0',
+    smoking_status: String(initial?.smoking_status ?? '0'),
+  }));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -361,14 +370,32 @@ function WearableStep({ onDone }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(null);
 
-  const loadDemo = async () => {
+  /**
+   * Load the demo history.
+   *
+   * The server refuses if the account holds real wearable days, so this asks
+   * before overwriting rather than discovering the loss afterwards. Demo data
+   * is deterministic and the demo profile is fixed, which is why every
+   * demo-seeded account shows the same scores -- said explicitly, because
+   * seeing someone else's numbers on your own dashboard looks like a bug.
+   */
+  const loadDemo = async ({ force = false } = {}) => {
     setError(null);
     setBusy('demo');
     try {
-      const response = await apiService.wearable.loadDemo(DEMO_DAYS);
-      setResult(`Seeded ${response.days ?? DEMO_DAYS} days of demo history.`);
+      const response = await apiService.wearable.loadDemo(DEMO_DAYS, { force });
+      setResult(`${response.wearableDays ?? DEMO_DAYS} days of demo history loaded. `
+        + (response.profileReplaced
+          ? 'Your profile was set to the demo persona, so these scores are the demo '
+            + 'scores and are identical on every demo account.'
+          : 'Your own profile was kept.'));
     } catch (requestError) {
+      if (requestError.details?.requiresForce) {
+        setConfirmOverwrite(requestError.message);
+        return;
+      }
       setError(requestError.message);
     } finally {
       setBusy(null);
@@ -439,12 +466,30 @@ function WearableStep({ onDone }) {
             size="sm"
             className="mt-3"
             loading={busy === 'demo'}
-            onClick={loadDemo}
+            onClick={() => loadDemo()}
           >
             Load {DEMO_DAYS} days
           </Button>
         </div>
       </div>
+
+      {confirmOverwrite && (
+        <Alert tone="warning" title="This would replace your real data">
+          {confirmOverwrite}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => { setConfirmOverwrite(null); loadDemo({ force: true }); }}
+            >
+              Replace it with demo data
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirmOverwrite(null)}>
+              Keep my data
+            </Button>
+          </div>
+        </Alert>
+      )}
 
       {error && <Alert tone="error">{error}</Alert>}
       {result && <Alert tone="info">{result}</Alert>}
@@ -458,6 +503,7 @@ export default function OnboardingPage() {
   // null while deciding which step to open on. Rendering step 1 first and then
   // jumping would flash a form the user has already filled in.
   const [step, setStep] = useState(null);
+  const [profile, setProfile] = useState(null);
   const navigate = useNavigate();
   const [search] = useSearchParams();
 
@@ -480,7 +526,9 @@ export default function OnboardingPage() {
 
     apiService.user.status()
       .then((status) => {
-        if (!cancelled) setStep(status.canBeAssessed || returningFromGoogle ? 2 : 1);
+        if (cancelled) return;
+        setProfile(status.staticData ?? null);
+        setStep(status.canBeAssessed || returningFromGoogle ? 2 : 1);
       })
       // A failed status check should not block onboarding; the first step is
       // the safe assumption, unless Google is sending the user back.
@@ -525,14 +573,21 @@ export default function OnboardingPage() {
             </CardHeader>
             {step === 1 && (
               <CardBody>
-                <ProfileStep onDone={() => setStep(2)} />
+                <ProfileStep initial={profile} onDone={() => setStep(2)} />
               </CardBody>
             )}
           </Card>
 
           <Card>
             <CardHeader>
-              <StepHeader step={2} current={step} title="Wearable history" />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <StepHeader step={2} current={step} title="Wearable history" />
+                {step === 2 && (
+                  <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                    Edit my profile
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             {step === 2 && (
               <CardBody>

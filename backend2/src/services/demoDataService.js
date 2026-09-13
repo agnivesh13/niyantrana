@@ -16,7 +16,7 @@
  *    green tells a reviewer nothing about the model. It was also chosen by
  *    measurement rather than by feel -- see DEMO_PROFILE.
  */
-import { ValidationError } from '../domain/errors.js';
+import { NotFoundError, ValidationError } from '../domain/errors.js';
 import loggingService from './loggingService.js';
 import userRepository from '../repositories/userRepository.js';
 import Food from '../models/Food.js';
@@ -142,27 +142,70 @@ export class DemoDataService {
    * because a reviewer clicking a "load demo data" button twice should not end
    * up with 180 days.
    */
+  /**
+   * Seed an account with the demo profile and history.
+   *
+   * **Refuses to destroy real data.** This used to overwrite the profile and
+   * replace the whole wearable history unconditionally, which meant someone who
+   * had entered their real measurements and imported a real device export lost
+   * both to a single click -- silently, with the UI describing only what was
+   * added. The surprise was visible from the outside too: because the generator
+   * is seeded with a constant and the profile is a constant, every demo-seeded
+   * account scores identically, so a user who had entered their own details saw
+   * someone else's numbers and reasonably concluded the accounts had crossed.
+   *
+   * Now: real wearable days (anything not tagged `source: 'demo'`) block the
+   * seed unless `force` is passed, and an existing complete profile is left
+   * alone unless it is a re-seed of demo data.
+   */
   async seed(userId, { days = DEFAULT_DAYS, trend = 'improving',
-    seed = 42, mealDays = 3 } = {}) {
+    seed = 42, mealDays = 3, force = false } = {}) {
+    const user = await this.users.findById(userId);
+    if (!user) throw new NotFoundError('User');
+
+    const history = user.watchHistory ?? [];
+    const realDays = history.filter((day) => day.source && day.source !== 'demo').length;
+    if (realDays > 0 && !force) {
+      throw new ValidationError(
+        `This account has ${realDays} days of real wearable data, which loading the `
+        + 'demo would replace. Confirm to overwrite it.',
+        { realDays, requiresForce: true },
+      );
+    }
+
+    // A real profile is the user's own measurement. Replacing it with the demo
+    // persona changes every score on the dashboard, so it happens only when
+    // there is nothing to lose or when the overwrite was confirmed.
+    const hadProfile = user.canBeAssessed();
+    const replaceProfile = !hadProfile || force;
+
     const entries = DemoDataService.generateWearableDays({ days, trend, seed });
 
-    await this.users.updateStaticData(userId, {
-      ...DEMO_PROFILE,
-      // BMR is recomputed by the user service; passing it here would go stale.
-      bmr: undefined,
-    });
+    if (replaceProfile) {
+      await this.users.updateStaticData(userId, {
+        ...DEMO_PROFILE,
+        // BMR is recomputed by the user service; passing it here would go stale.
+        bmr: undefined,
+      });
+    }
     await this.users.replaceWatchData(userId, entries);
 
     const meals = await this.#seedMeals(userId, mealDays);
 
     return {
-      profile: DEMO_PROFILE,
+      profile: replaceProfile ? DEMO_PROFILE : user.staticData,
+      profileReplaced: replaceProfile,
       wearableDays: entries.length,
       trend,
       mealsLogged: meals,
       source: 'demo',
       notice: 'This history was generated for demonstration. '
-        + 'Every wearable day is stored with source "demo".',
+        + 'Every wearable day is stored with source "demo".'
+        + (replaceProfile
+          ? ' Your profile was set to the demo persona, so the scores shown are the '
+            + 'demo profile scores, identical on every demo account.'
+          : ' Your own profile was kept, so the scores are computed from your '
+            + 'measurements against demo activity.'),
     };
   }
 

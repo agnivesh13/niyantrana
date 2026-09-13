@@ -45,7 +45,9 @@ export async function importWearableData(req, res) {
 export async function loadDemoData(req, res) {
   const days = Number(req.body?.days) || 90;
   const trend = req.body?.trend || 'improving';
-  const result = await demoDataService.seed(req.user.id, { days, trend });
+  // `force` is the caller confirming that overwriting real data is intended.
+  const force = req.body?.force === true;
+  const result = await demoDataService.seed(req.user.id, { days, trend, force });
   res.status(201).json(result);
 }
 

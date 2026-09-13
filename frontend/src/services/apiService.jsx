@@ -126,7 +126,14 @@ export const risk = {
 export const wearable = {
   formats: () => request('/api/wearable/formats'),
   import: (data, source = 'import') => request('/api/wearable/import', { method: 'POST', body: { data, source } }),
-  loadDemo: (days = 90) => request('/api/wearable/demo', { method: 'POST', body: { days } }),
+  /**
+   * Seed demo history. `force` confirms overwriting real data.
+   *
+   * Without it the server refuses when the account holds wearable days that did
+   * not come from a previous demo, rather than replacing them silently.
+   */
+  loadDemo: (days = 90, { force = false } = {}) =>
+    request('/api/wearable/demo', { method: 'POST', body: { days, force } }),
 
   // --- Google Health ---
   googleHealthStatus: () => request('/api/wearable/google-health'),
