@@ -18,10 +18,9 @@
 | `frontend/` | ⬜ Out of scope — being replaced wholesale (Days 8-9 skipped; dead Google Fit code and 2.2 MB of duplicate data removed) |
 | Deployment | ✅ Live on Render + Atlas M0; predict, chat and recommend all verified in production |
 
-**Restructure (done alongside Day 1):** both services rebuilt on a layered
-architecture following refactoring.guru principles. See
-**[docs/REFACTORING.md](docs/REFACTORING.md)** for every decision mapped to a
-named smell, pattern or technique.
+**Structure:** both services are built on a layered architecture with
+dependencies pointing inward. See **[docs/DESIGN.md](docs/DESIGN.md)** for the
+principle behind each structural decision.
 
 ```
 ml/src/     domain -> features -> inference -> risk -> api      (+ training, data, recommendation)
@@ -137,7 +136,7 @@ across every target — more than BMI in all six. Onboarding must insist on it.
 | diabetes | 16.9% | 0.799 | 90% | 0.55 | 0.29 |
 | fatty_liver | 42.7% | 0.958 | 92% | 0.83 | 0.80 |
 
-**All three pitched conditions now exist.** v1 shipped fatty liver only.
+**All three pitched conditions are scored**, from one shared feature set.
 
 **Three findings:**
 
@@ -343,9 +342,9 @@ since each worker loads its own ~7 MB of models.
 | **stopped** | **503** — `provenance: unavailable`, **zero invented scores** |
 | restarted | **200** — recovers with no intervention |
 
-v1 answered the middle row with `TG: 150 + Math.random() * 50` and HTTP 200, in
-three separate places. `fails loudly when the ML service is unreachable` exists
-so that cannot come back.
+A fallback would answer the middle row with `TG: 150 + Math.random() * 50` and
+HTTP 200 — which the caller cannot tell apart from a real prediction.
+`fails loudly when the ML service is unreachable` exists so that cannot appear.
 
 Full journey exercised against the running server: register 201 → login 200 →
 profile 200 (BMR computed server-side) → 14 wearable days 201 → food search
@@ -415,8 +414,8 @@ were real. This uses the `measured` path the inference service already had.
 
 ### Plan change — "unlogged" is no longer sent as zero
 
-The old payload sent `calorie_intake: 0` when nothing was logged, which tells
-the model the user fasted. `UserProfile` diet fields are now `float | None`, the
+Sending `calorie_intake: 0` when nothing was logged tells the model the user
+fasted, which is a different fact from not having logged. `UserProfile` diet fields are now `float | None`, the
 feature bridge passes `None` through, and the gradient-boosting estimators
 handle the missing feature natively. Verified: no-diet-logged, logged-a-fast and
 logged-3100-kcal now produce three different estimates, because they are three
@@ -704,9 +703,9 @@ fabricating.
 - [x] Real held-out metrics on real data, beating a mean-predictor baseline
       *(NHANES n=17,961; 6/6 regression targets and 4/4 classifiers)*
 - [x] All three diseases scored *(four heads: fatty liver, dysglycaemia,
-      diabetes, hypertension — v1 shipped one)*
-- [x] No API key reachable from the browser *(the last one was found and removed
-      on Day 15)*
+      diabetes, hypertension)*
+- [x] No API key reachable from the browser *(verified against the built
+      bundle)*
 - [x] README a reviewer can trust
 
 **All seven met**, with the caveat that "from a phone" awaits the frontend
@@ -723,4 +722,4 @@ rebuild — the API itself is live and exercised.
 | [ml/RESULTS.md](ml/RESULTS.md) | Every metric, ablation and negative result |
 | [docs/PORTFOLIO_NOTES.md](docs/PORTFOLIO_NOTES.md) | How to talk about it in an interview |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Step-by-step deploy, and the five things that bite |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/REFACTORING.md](docs/REFACTORING.md) | Design rationale |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DESIGN.md](docs/DESIGN.md) | Design rationale |

@@ -83,9 +83,9 @@ If someone challenges 0.80 as low: predicting blood chemistry from lifestyle alo
 
 ## Engineering points worth raising
 
-**A health service must never invent a number.** v1 returned `Math.random()` as an AI risk assessment in three places, always with HTTP 200 — indistinguishable from a real prediction. One even returned a *stranger's* hardcoded 2023 lab values as the user's own "Doctor's Report" for sharing with a physician.
+**A health service must never invent a number.** `provenance` is a **required** field on the score object, the API response and the database schema, so a score cannot be persisted or returned without declaring its origin. Tests assert that killing the inference service produces a 503, not a plausible number.
 
-v2 makes that structurally impossible: `provenance` is a **required** field on the score object, the API response, and the database schema. A score cannot be persisted or returned without declaring its origin. Tests assert that killing the inference service produces a 503, not a plausible number.
+The point worth making is why it is a type and not a convention. A fallback that returns `TG: 150 + Math.random()*50` with HTTP 200 is indistinguishable from a real prediction at the call site — and the moment a substitute is most tempting (model down, history too short, biomarker never measured) is exactly the moment a user is least able to tell.
 
 **Deployment decisions were measured, not guessed.**
 

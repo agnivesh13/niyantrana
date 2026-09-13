@@ -1,30 +1,36 @@
-# Niyantrana — Architecture v2
+# Niyantrana — Architecture
 
-> The design as built. Supersedes the original design described in the pitch
-> decks, for the reasons in section 1.
+> The system as built: what each service does, what the model is trained on, and
+> the constraints that shaped both.
 
 ---
 
-## 1. Why v1 had to be redesigned
+## 1. Choosing a target the data can supervise
 
-The v1 design asked a single model to predict **today's blood biomarkers** from **14 days of wearable data**.
+The obvious formulation of this problem is **14 days of wearable data → today's
+blood biomarkers**. It is also unlearnable, and the obstacle is measurement
+rather than modelling: nobody draws blood daily, so no dataset exists in which
+that mapping is observed.
 
-That target cannot be supervised by any real dataset, because nobody draws blood daily. This is *why* the project had to generate synthetic data — and why the synthetic data could not work:
+We established this by building it. Trained on generated daily data for 15
+personas, the model reported **R² 0.900** for triglycerides and **0.974** for
+GGT. Both figures were artefacts of how the data was split — scalers fitted
+before splitting, and a random split over 14-day windows that overlap by 13 of
+14 days, so the same person lands on both sides with near-duplicate rows. Split
+by participant instead, the same model scores **R² −0.89 / −0.87: worse than
+predicting the mean.** At the person level, 15 personas is nine training
+examples, and no architecture recovers from that.
 
-| | v1 result |
-|---|---|
-| Reported | R² 0.900 (TG) / 0.974 (GGT) |
-| Cause | Scalers fit before splitting; random split over 14-day windows overlapping 13/14 days, same 15 users on both sides |
-| Actual, on disjoint users | **R² −0.89 / −0.87 — worse than predicting the mean** |
-| Served path | MLP branch fed all-NaN; every user got a bit-identical prediction |
+**The feature bridge is the answer to it.**
 
-At the person level, 15 synthetic personas is **9 training examples**. No architecture recovers from that.
+NHANES measures self-reported **sleep duration** (`SLD012`) and **weekly
+activity minutes** (`PAQ`). A wearable measures the same two quantities with a
+better instrument. So rather than forcing raw wearable sequences into a model no
+real data can train, the system **derives NHANES-comparable features from the
+wearable window** and trains the core model on 17,961 real adults.
 
-**The v2 insight — the feature bridge:**
-
-NHANES measures self-reported **sleep duration** (`SLD012`) and **weekly activity minutes** (`PAQ`). A wearable measures the same two quantities with a different instrument. So instead of forcing raw wearable sequences into a model no real data can train, v2 **derives NHANES-comparable features from the wearable window** and trains the core model on 17,961 real adults.
-
-The wearable stops being the thing the model can't learn from, and becomes the thing that keeps those features fresh.
+The wearable stops being the thing the model cannot learn from and becomes the
+thing that keeps those features current — daily, without a clinic visit.
 
 ---
 
@@ -48,7 +54,7 @@ flowchart TB
     end
 
     DB[("MongoDB Atlas M0<br/>512 MB free")]
-    FITBIT["Fitbit Web API<br/>OAuth2 + PKCE"]
+    HEALTH["Google Health API<br/>OAuth2, server-side"]
     GEMINI["Gemini API<br/>free tier"]
 
     PWA -->|"fetch, credentials: include"| NODE
@@ -56,15 +62,21 @@ flowchart TB
     NODE -->|"POST /predict"| FAST
     NODE -->|"POST /recommend"| FAST
     NODE -->|"proxied — key never in browser"| GEMINI
-    NODE <-->|"server-side token exchange"| FITBIT
+    NODE <-->|"server-side token exchange"| HEALTH
     FAST --> RISK
     FAST --> TEMP
     FAST --> RAG
 ```
 
-**Three deployed services, not four.** The standalone `rag_engine/` is folded into the inference service — free-tier instance-hours are shared per workspace, and the RAG layer already needs the same food database.
+**Three deployed services, not four.** The RAG recommender lives inside the
+inference service rather than alongside it: free-tier instance-hours are shared
+per workspace, and it already needs the same food database loaded in the same
+process.
 
-**Why onnxruntime and not TensorFlow:** measured on this machine, importing TensorFlow costs **358 MB RSS**; onnxruntime costs **33 MB**. Render's free tier caps at 512 MB. Training stays in Keras offline; only the exported ONNX graph ships. Parity verified at 5.9e-08.
+**Why onnxruntime and not TensorFlow:** measured on this machine, importing
+TensorFlow costs **358 MB RSS**; onnxruntime costs **33 MB**. Render's free tier
+caps at 512 MB. Training stays in Keras offline; only the exported ONNX graph
+ships. Parity verified at 5.9e-08.
 
 ---
 
@@ -111,7 +123,9 @@ flowchart LR
 
 ### Stage 1 — Risk Engine (the scientific core)
 
-Trained on **real NHANES data**, using only features the app can supply.
+Trained on **real NHANES data**, using only features the app can actually
+supply. A feature the app cannot collect is a feature that will be missing at
+serving time, so it is not in the training set either.
 
 | Group | Features |
 |---|---|
@@ -120,9 +134,14 @@ Trained on **real NHANES data**, using only features the app can supply.
 | Wearable-derived | `sleep_hours`, `mvpa_min_week`, `vigorous_min_week`, `moderate_min_week`, `sedentary_min_day` |
 | Lifestyle | `alcohol_drinks_week`, `smoking_status` |
 
-Alcohol matters because it is a **major GGT confounder**, and GGT feeds the fatty-liver estimate: omitting it biases that score.
+Alcohol is in that list because it is a **major GGT confounder**, and GGT feeds
+the fatty-liver estimate: omitting it biases that score.
 
-**Model:** `HistGradientBoostingRegressor` (scikit-learn). Chosen over XGBoost/LightGBM because it handles NaN natively — essential for NHANES, where every column has real missingness — and adds **zero deployment dependencies** beyond the scikit-learn already needed for scalers.
+**Model:** `HistGradientBoostingRegressor` (scikit-learn). Chosen over
+XGBoost/LightGBM because it handles NaN natively — essential for NHANES, where
+every column has real missingness, and equally essential at serving time, where
+a user may simply not own a heart-rate sensor. It also adds **zero deployment
+dependencies** beyond the scikit-learn already needed for the scalers.
 
 **Targets and availability** (from the ingested 17,961 adults):
 
@@ -139,21 +158,30 @@ Alcohol matters because it is a **major GGT confounder**, and GGT feeds the fatt
 - Dysglycaemia — HbA1c ≥ 5.7 (pre) / ≥ 6.5 (diabetic)
 - Hypertension — ≥ 130/80
 
-This is what delivers the deck's *"jointly predicts all three conditions"* claim; the original produced fatty liver alone.
+Three conditions from one feature set, because they share one underlying
+metabolic process: ~60% of people with diabetes also have hypertension, and
+over 70% also have fatty liver. Modelling them jointly is how the screening
+matches the clustering.
 
 ### Stage 2 — Trajectory model
 
-The LSTM survives, with its job changed. It no longer predicts absolute biomarker values (unsupervisable). It predicts a **relative trend** on top of the Stage 1 baseline, and every response it touches is tagged `simulation-trained` until real longitudinal data is secured.
+The LSTM reads the 14-day window and predicts a **relative trend** on top of the
+Stage 1 baseline rather than an absolute biomarker value — the absolute version
+is the unsupervisable target from section 1. Every response it touches is tagged
+`simulation-trained` until real longitudinal data is secured, because that is
+what it is.
 
 ### Stage 3 — Risk trajectory
 
-Run the Risk Engine over rolling windows of the user's history → a risk time series → fit a trend → extrapolate. This delivers the deck's "early warning / risk trajectory" promise using only defensible inputs, with no pretence of daily blood draws.
+Run the Risk Engine over rolling windows of the user's own history → a risk time
+series → fit a trend → extrapolate. This produces early warning from defensible
+inputs alone, with no pretence of daily blood draws.
 
 ---
 
 ## 4. The provenance contract
 
-The single most important rule in this codebase, because v1 violated it in three places:
+The single most important rule in this codebase:
 
 > **Never emit a number without saying where it came from.**
 
@@ -163,15 +191,21 @@ Every risk value in every API response carries a `source`:
 |---|---|
 | `model` | Real prediction from the NHANES-trained Risk Engine |
 | `simulation` | Involves the simulation-trained trajectory model |
-| `heuristic` | Rule-based fallback (e.g. FLI computed from user-entered labs) |
+| `heuristic` | Rule-based (e.g. FLI computed directly from user-entered labs) |
 | `unavailable` | Inference failed — **an error, never a substituted value** |
 
-What v1 did instead, and v2 deletes:
-- `apiRoutes.js` returned `TG: 150 + Math.random()*50` on any ML failure, always with HTTP 200
-- `apiService.jsx` returned `riskScore: Math.random()*100` as an "AI risk assessment"
-- `profileService.js` returned a **stranger's fabricated 2023 lab values** as the user's Doctor's Report
+The rule exists because the moment a substitute is most tempting is the moment
+it is most harmful. A model timeout, a history too short to score, a biomarker
+the user never had measured — each is a point where returning a plausible number
+is easy and silently wrong, and where the user has no way to tell. So the
+absence is reported instead, and the UI says which of the four it is.
 
-The UI surfaces the badge, alongside a standing medical disclaimer: advisory only, not a diagnostic device, confirm with clinical tests.
+`unavailable` is a 503, not a 200 with a filled-in field. The contract is
+enforced by construction: `Provenance` is a required argument on the score value
+object, so no code path can return a number without one.
+
+The UI surfaces the badge alongside a standing medical disclaimer: advisory
+only, not a diagnostic device, confirm with clinical tests.
 
 ---
 
@@ -197,15 +231,20 @@ POST /api/predict   (session cookie)
 
 ## 6. Security posture
 
-| Concern | v1 | v2 |
-|---|---|---|
-| Gemini API key | Shipped in the browser bundle (`VITE_GEMINI_API_KEY`) | Server-side only, proxied via `/api/chat` |
-| OAuth secret | n/a | Server-side authorization-code exchange; never in the client |
-| Key logging | `console.log("My Gemini Key Is:", ...)` on every boot | Removed |
-| Flask debug | `debug=True` on `0.0.0.0` — remote Werkzeug console | Removed; FastAPI, no debug |
-| Session secret | Hardcoded fallback `'a secret key for the hackathon'` | Required env var, boot fails without it |
-| Cookies | `secure: false` | `secure: true`, `sameSite: none`, `trust proxy` |
-| Health data | PHI unencrypted in browser localStorage | Server-side, per-user isolated |
+The data here is health data attached to a named account, so the defaults are
+set for that: secrets stay on the server, sessions are required, and nothing
+sensitive is stored where the browser can read it.
+
+| Concern | How it is handled |
+|---|---|
+| Gemini API key | Server-side only. The chat and recommendation endpoints proxy it, so it never enters the bundle |
+| OAuth client secret | Server-side authorization-code exchange; the browser only ever sees the consent redirect |
+| Secrets in logs | Nothing that reads as a credential is printed at boot or in request logs |
+| Session secret | A required environment variable. Boot fails without it rather than falling back to a default that would be identical across every deployment |
+| Cookies | `secure: true`, `sameSite: none`, behind `trust proxy` — the client and API are on different origins, so anything less does not survive the round trip |
+| Health data | Server-side and per-user isolated. `localStorage` holds UI preferences only |
+| Inference service | FastAPI with no debug server, and no interactive console reachable from outside |
+| Account deletion | A single authenticated call removes the profile, history, reports and session — no support ticket, no retention window |
 
 ---
 
@@ -215,13 +254,16 @@ POST /api/predict   (session cookie)
 |---|---|---|
 | Frontend | Cloudflare Pages | Free, global CDN, **no sleep** |
 | Node API | Render free web service | 512 MB / 0.1 CPU, sleeps after 15 min, ~1 min cold start |
-| Inference | Render free web service | Same; fits only because TF was dropped |
+| Inference | Render free web service | Same; fits only because TF stays out of the serving path |
 | Database | MongoDB Atlas M0 | 512 MB, free forever, no card |
 | LLM | Gemini API free tier | ~10 RPM on 2.5 Flash |
 
-Total cost: **₹0/month.** Cold start is the one real cost — wake the URL before demoing.
+Total cost: **₹0/month.** Cold start is the one real cost, and the client
+absorbs it: the landing and sign-in pages wake both services while the visitor
+reads, and the dashboard retries around a container that is still booting.
 
-Upgrade path: GitHub Student Developer Pack (DigitalOcean $200, Azure $100) buys always-on if the cold start becomes annoying.
+Upgrade path: the GitHub Student Developer Pack (DigitalOcean $200, Azure $100)
+buys always-on hosting if the cold start becomes tiresome.
 
 ---
 

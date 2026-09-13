@@ -46,7 +46,7 @@ The training code therefore judges FLI against the formula reference, not the me
 
 ## 3. What the model is and is not good at
 
-**Genuinely useful — hypertension and dysglycaemia.** Systolic BP (R² 0.270) and HbA1c (R² 0.129) are the strongest honest results. These are the two conditions the project pitched but v1 never implemented at all.
+**Genuinely useful — hypertension and dysglycaemia.** Systolic BP (R² 0.270) and HbA1c (R² 0.129) are the strongest honest results, and they are the two conditions that most justify a screening tool: both are common, both are silent, and both are confirmable with a cheap test.
 
 **Weak — triglycerides.** R² 0.045. MAE improves 12.9% over the baseline, so the ranking carries some signal, but the model explains almost none of the variance. Serum triglycerides swing with recent meals and fasting state; a single 24-hour dietary recall cannot capture that.
 
@@ -73,9 +73,9 @@ Permutation importance (MAE damage when a column is shuffled):
 
 ---
 
-## 5. Why the previous model was replaced
+## 5. Why the training data is real
 
-The v1 multimodal LSTM+MLP reported **R² 0.900 (TG) / 0.974 (GGT)**. Both figures were artifacts.
+A multimodal LSTM+MLP over synthetic daily windows reported **R² 0.900 (TG) / 0.974 (GGT)**. On a problem where the published literature struggles past 0.3, that is a reason to audit the split rather than to publish the number. Both figures were artifacts.
 
 | | |
 |---|---|
@@ -83,18 +83,20 @@ The v1 multimodal LSTM+MLP reported **R² 0.900 (TG) / 0.974 (GGT)**. Both figur
 | Leak 2 | The split was random over 14-day sliding windows overlapping by **13 of 14 days**, with the same 15 users on both sides |
 | Corrected | Split by **disjoint user**, scalers fit on train only → **R² −0.89 (TG) / −0.87 (GGT)** — worse than predicting the mean |
 
-Separately, the *served* path was broken: `predict.py` concatenated a 1-row profile with a 14-row window on `axis=1`, leaving the MLP branch all-NaN. Every user received a bit-identical prediction regardless of age, BMI or diet. Verified: a healthy 20-year-old and a high-risk 73-year-old both returned `153.47 / 34.44`.
+The serving path failed the same way, silently. Concatenating a 1-row profile with a 14-row window on `axis=1` left the MLP branch all-NaN, so every user received a bit-identical prediction regardless of age, BMI or diet — a healthy 20-year-old and a high-risk 73-year-old both returned `153.47 / 34.44`. Nothing raised; a confident number came back. Two tests now guard this: one asserts differing profiles yield differing predictions, the other that an unavailable model raises rather than substitutes.
 
-Fifteen synthetic personas is **nine training examples at the person level**. No architecture recovers from that. Hence the move to real data.
+Fifteen synthetic personas is **nine training examples at the person level**, and no architecture recovers from that. So the training set is real:
 
-| | v1 (synthetic) | v2 (NHANES) |
+| | Synthetic | NHANES |
 |---|---|---|
 | People | 15 personas | **17,961 adults** |
 | Provenance | Generated, with an explicit `trend_type` label | CDC survey, public domain |
 | Honest TG R² | −0.89 | +0.045 |
-| Conditions | Fatty liver only | Fatty liver + dysglycaemia + hypertension |
+| Conditions supervisable | Fatty liver only | Fatty liver + dysglycaemia + hypertension |
 
-v2's numbers are far lower and far more trustworthy.
+The numbers below are far lower than 0.97 and far more trustworthy. A model that
+explains 4.5% of the variance in triglycerides is a weak model; one that reports
+90% because it memorised its own validation set is not a model at all.
 
 ---
 
@@ -143,8 +145,9 @@ Operating points target ~90% sensitivity, not accuracy. This is a screening
 tool: missing an at-risk person costs more than a false alarm that resolves
 with a confirmatory blood test.
 
-**All three conditions the pitch promised now exist.** v1 shipped fatty liver
-only, and even that was computed from `Math.random()` biomarkers.
+**All three conditions are scored from one feature set**, which is the point:
+they share an underlying metabolic process, so a person flagged for one is worth
+screening for the others.
 
 ## 9. The fatty-liver AUROC of 0.958 is close to a tautology
 
@@ -347,13 +350,13 @@ only how trustworthy the data was but which model answered.
 The deck promised a long-term risk trajectory and early warning. That is now
 delivered **without any sequence model**, and that is a deliberate choice.
 
-The v1 design trained an LSTM to map 14 days of wearable data onto same-day
+The obvious design trains an LSTM to map 14 days of wearable data onto same-day
 biomarkers. No real dataset can supervise that, because nobody draws blood
-daily. That is exactly why the original data had to be synthetic, and why the
-model scored R2 -0.89 on held-out users. Retraining it as a delta model changes
-the output but not the supervision problem.
+daily — which is why an attempt at it has to invent its own data, and why doing
+so scored R2 -0.89 on held-out users (section 5). Recasting the same network as
+a delta model changes the output but not the supervision problem.
 
-**Datasets checked and rejected on Day 4:**
+**Datasets checked and rejected:**
 
 | Dataset | Size | Verdict |
 |---|---|---|

@@ -15,11 +15,11 @@ the build fails at `FROM python:3.13-slim` with
 
 ```bash
 cd ml
-docker build -t niyantrana-inference:v2 .
+docker build -t niyantrana-inference .
 
 # --memory=512m --cpus=0.5 mirrors the Render free tier.
 docker run -d --name niy --memory=512m --memory-swap=512m --cpus=0.5 \
-  -p 8113:8000 niyantrana-inference:v2
+  -p 8113:8000 niyantrana-inference
 
 curl -s localhost:8113/health
 docker stats niy --no-stream
@@ -29,7 +29,7 @@ docker logs niy
 With a Gemini key, `/recommend` becomes live:
 
 ```bash
-docker run -d --name niy -p 8113:8000 -e GEMINI_API_KEY=... niyantrana-inference:v2
+docker run -d --name niy -p 8113:8000 -e GEMINI_API_KEY=... niyantrana-inference
 ```
 
 ## Measured on this image
@@ -49,6 +49,6 @@ Cold start includes the functional probe loading both model bundles, so once
 
 ```bash
 docker run -d --name broken -p 8114:8000 \
-  -e RISK_ENGINE_PATH=/app/models/gone.joblib niyantrana-inference:v2
+  -e RISK_ENGINE_PATH=/app/models/gone.joblib niyantrana-inference
 curl -s -o /dev/null -w "%{http_code}\n" localhost:8114/health   # 503
 ```

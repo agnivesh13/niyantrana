@@ -62,8 +62,8 @@ The client *secret* exists only on the server.
 
 Both backend services spin down after fifteen minutes idle on their free tier,
 and the inference container needs the best part of a minute to come back — so
-the first visit after a quiet spell used to land on "the model is not
-answering", which describes a working system as a broken one.
+without handling, the first visit after a quiet spell lands on "the model is
+not answering", which describes a working system as a broken one.
 
 Two things handle it, and the detail that makes them work is the timeout:
 

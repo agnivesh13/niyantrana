@@ -65,9 +65,9 @@ Full write-up, including the ablation and every limitation: **[ml/RESULTS.md](ml
 
 ---
 
-## The finding this project is really about
+## Validating the model before trusting it
 
-The previous version reported **R² 0.900 (triglycerides) / 0.974 (GGT)** from an LSTM on synthetic data. Both figures were artifacts:
+An LSTM over 14-day synthetic windows reported **R² 0.900 (triglycerides) / 0.974 (GGT)**. Numbers that good on a problem this hard are a reason to audit the split, not to celebrate it. Both figures were artifacts:
 
 | | |
 |---|---|
@@ -75,9 +75,9 @@ The previous version reported **R² 0.900 (triglycerides) / 0.974 (GGT)** from a
 | Leak 2 | The split was random over 14-day sliding windows overlapping by **13 of 14 days**, same 15 users on both sides |
 | Corrected | Split by **disjoint user**, scalers fit on train only → **R² −0.89 / −0.87** — worse than predicting the mean |
 
-Separately, the *served* model was broken: `predict.py` concatenated a 1-row profile with a 14-row window on `axis=1`, leaving the tabular branch all-NaN. Every user got a bit-identical prediction. Verified — a healthy 20-year-old and a high-risk 73-year-old both returned `153.47 / 34.44`.
+The serving path had the same character. Concatenating a 1-row profile with a 14-row window on `axis=1` left the tabular branch all-NaN, so every user received a bit-identical prediction — a healthy 20-year-old and a high-risk 73-year-old both returned `153.47 / 34.44`. It never raised. It returned a confident number, which is the failure mode the provenance rule below exists to make impossible. A regression test now asserts that two different profiles produce two different predictions.
 
-Fifteen synthetic personas is **nine training examples at the person level**. Hence the move to real data.
+Fifteen synthetic personas is **nine training examples at the person level**, and no architecture recovers from that. Hence real data.
 
 ### And the one that mattered most
 
@@ -93,16 +93,16 @@ Fixed with monotonic constraints on activity and sedentary time, at a cost of **
 
 Every risk value carries a `provenance` (`model` / `simulation` / `heuristic` / `unavailable`) and a `basis` (`calibrated_classifier` / `clinical_formula`). Provenance is a **required** field on `RiskScore`, on the API response, and on the Mongoose schema — so a score cannot be returned or persisted without declaring where it came from.
 
-This replaced three places where v1 returned `Math.random()` with HTTP 200:
+The rule is a type rather than a convention because the moment a substituted value is most tempting is the moment it is most harmful — and a caller cannot distinguish a fabricated number from a real one when both arrive as HTTP 200.
 
-| v1 | v2 |
+| Situation | Response |
 |---|---|
-| ML unreachable → `TG: 150 + Math.random()*50` | **503**, `provenance: "unavailable"`, no scores |
-| Empty wearable history → 14 fabricated days | `400` naming how many days exist |
-| Missing FLI inputs → the literal `50` | Returns `null`; the scorer abstains |
-| "Doctor's Report" → a stranger's fabricated 2023 labs | Deleted |
+| Inference service unreachable | **503**, `provenance: "unavailable"`, no scores |
+| Wearable history too short to score | **400** naming how many days exist |
+| FLI inputs incomplete | `null` — the scorer abstains |
+| A biomarker the user never had measured | Absent, never zero |
 
-Locked by tests in both services.
+Each is a point where returning something plausible would have been easier. Locked by tests in both services.
 
 ---
 
@@ -125,7 +125,7 @@ ml/src/        domain → features → inference → risk → api   (+ training,
 backend2/src/  config → domain → models → repositories → services → controllers → routes
 ```
 
-`domain/` holds no I/O and no framework imports in either service. Full design rationale, and every decision mapped to a named refactoring: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** · **[docs/REFACTORING.md](docs/REFACTORING.md)**
+`domain/` holds no I/O and no framework imports in either service. Full design rationale, and the principle behind each structural decision: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** · **[docs/DESIGN.md](docs/DESIGN.md)**
 
 ### Why the inference image excludes TensorFlow
 
@@ -154,8 +154,8 @@ Both dependencies are containers. On Windows with a user-level Docker install, s
 ```bash
 # 1. Database + inference service
 docker run -d --name niy-mongo -p 27017:27017 mongo:7
-cd ml && docker build -t niyantrana-inference:v2 . \
-  && docker run -d --name niy-ml --memory=512m --cpus=0.5 -p 8000:8000 niyantrana-inference:v2
+cd ml && docker build -t niyantrana-inference . \
+  && docker run -d --name niy-ml --memory=512m --cpus=0.5 -p 8000:8000 niyantrana-inference
 
 # 2. API
 cd ../backend2 && npm install && npm run seed     # loads 1,014 Indian foods

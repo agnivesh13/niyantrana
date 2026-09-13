@@ -13,8 +13,8 @@ install, so the CLI needs a PATH export first (see `../ml/DOCKER.md`).
 # 1. MongoDB
 docker run -d --name niy-mongo -p 27017:27017 mongo:7
 
-# 2. Inference service (build it once: cd ../ml && docker build -t niyantrana-inference:v2 .)
-docker run -d --name niy-ml --memory=512m -p 8000:8000 niyantrana-inference:v2
+# 2. Inference service (build it once: cd ../ml && docker build -t niyantrana-inference .)
+docker run -d --name niy-ml --memory=512m -p 8000:8000 niyantrana-inference
 
 # 3. Dependencies and food data
 npm install
@@ -114,10 +114,10 @@ the canonical shape; nothing downstream changes.
 unreachable, `/api/predict` returns **503** with `provenance: "unavailable"` and
 no risk scores. It does not fall back to a plausible-looking default.
 
-v1 did exactly that, in three separate places — `TG: 150 + Math.random() * 50`
-returned with HTTP 200, indistinguishable from a real prediction. The
-integration test `fails loudly when the ML service is unreachable` exists to
-stop that regressing.
+The alternative — `TG: 150 + Math.random() * 50` returned with HTTP 200 — is
+indistinguishable from a real prediction at the call site, which is what makes
+it dangerous rather than merely wrong. The integration test `fails loudly when
+the ML service is unreachable` exists to keep that impossible.
 
 Every persisted health report carries a required `provenance` field, so a score
 cannot be written to the database without recording where it came from.

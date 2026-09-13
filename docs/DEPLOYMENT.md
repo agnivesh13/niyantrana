@@ -245,8 +245,8 @@ Everything above runs locally in Docker:
 
 ```bash
 docker run -d --name niy-mongo -p 27017:27017 mongo:7
-cd ml && docker build -t niyantrana-inference:v2 .
-docker run -d --name niy-ml --memory=512m --cpus=0.5 -p 8000:8000 niyantrana-inference:v2
+cd ml && docker build -t niyantrana-inference .
+docker run -d --name niy-ml --memory=512m --cpus=0.5 -p 8000:8000 niyantrana-inference
 
 cd ../backend2 && npm install && npm run seed
 MONGO_URI=mongodb://127.0.0.1:27017/niyantrana \
