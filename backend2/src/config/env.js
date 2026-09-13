@@ -102,6 +102,23 @@ export function assertValidConfig() {
   if (problems.length) {
     throw new Error(`Invalid configuration:\n  - ${problems.join('\n  - ')}`);
   }
+
+  // Warnings, not failures: each of these disables one optional feature while
+  // leaving the rest of the service correct, and refusing to boot would take
+  // the whole app down over something the operator may not be using. They go to
+  // the deploy log, where a half-configured integration is visible before a
+  // user finds it.
+  const localCallback = /localhost|127\.0\.0\.1/.test(config.google.healthRedirectUri);
+  if (config.isProduction && config.google.clientId && localCallback) {
+    console.warn('[config] GOOGLE_HEALTH_REDIRECT_URI still points at localhost. '
+      + 'Google Health consent will fail in production until it is set to '
+      + 'https://<this-api-host>/auth/google/health/callback');
+  }
+  if (config.google.clientId && !config.google.clientSecret) {
+    console.warn('[config] GOOGLE_CLIENT_ID is set but GOOGLE_CLIENT_SECRET is not. '
+      + 'Sign in with Google works; connecting Google Health does not.');
+  }
+
   return config;
 }
 

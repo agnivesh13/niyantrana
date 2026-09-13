@@ -96,6 +96,15 @@ export async function googleHealthStart(req, res) {
     return backToApp(res, { google_health: 'unconfigured' });
   }
 
+  // GOOGLE_HEALTH_REDIRECT_URI defaults to localhost:8080 for development. If
+  // that default survives into production, Google sends the user to their own
+  // machine after consenting -- a failure that looks like the app hanging
+  // rather than like a missing environment variable. Caught before the
+  // redirect, while there is still somewhere useful to send them.
+  if (config.isProduction && /localhost|127\.0\.0\.1/.test(config.google.healthRedirectUri)) {
+    return backToApp(res, { google_health: 'bad_redirect_uri' });
+  }
+
   const state = crypto.randomBytes(32).toString('base64url');
   req.session.googleHealthState = state;
 

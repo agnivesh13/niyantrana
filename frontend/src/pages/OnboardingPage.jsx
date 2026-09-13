@@ -187,6 +187,9 @@ const OUTCOME_MESSAGE = {
   state_mismatch: () => 'That sign-in did not match this browser session — usually a '
     + 'stale tab or a session that expired mid-flow. Try connecting again.',
   session_error: () => 'The session could not be saved before redirecting. Try again.',
+  bad_redirect_uri: () => 'This server is configured with a localhost callback URL, so '
+    + 'Google cannot send you back. GOOGLE_HEALTH_REDIRECT_URI needs the public API '
+    + 'address.',
   failed: (reason) => `Google refused the connection${reason ? `: ${reason}` : ''}.`,
   signin_required: () => 'Sign in first, then connect Google Health.',
 };
