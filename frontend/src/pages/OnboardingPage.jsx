@@ -172,6 +172,26 @@ function ProfileStep({ onDone }) {
 }
 
 /**
+ * What each failure from the consent flow actually means.
+ *
+ * Written as causes rather than symptoms: every one of these has a specific
+ * fix, and "Google access was not granted" — the single message this replaces —
+ * sent you looking in the wrong place for three of the four.
+ */
+const OUTCOME_MESSAGE = {
+  denied: (reason) => (reason === 'access_denied'
+    ? 'You declined the permission request, so nothing was connected.'
+    : `Google did not complete the connection${reason ? ` (${reason})` : ''}.`),
+  unconfigured: () => 'This server has no Google client secret configured, so the '
+    + 'connection cannot be completed. The file import below still works.',
+  state_mismatch: () => 'That sign-in did not match this browser session — usually a '
+    + 'stale tab or a session that expired mid-flow. Try connecting again.',
+  session_error: () => 'The session could not be saved before redirecting. Try again.',
+  failed: (reason) => `Google refused the connection${reason ? `: ${reason}` : ''}.`,
+  signin_required: () => 'Sign in first, then connect Google Health.',
+};
+
+/**
  * Connect Google Health.
  *
  * The live first-party path, and the successor to both Google Fit (closed to
@@ -219,17 +239,24 @@ function GoogleHealthCard({ onSynced }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Returning from Google's consent screen. The backend put the outcome in the
-  // query string because it redirects a browser, not an XHR.
+  // Returning from Google's consent screen. The backend puts the outcome in the
+  // query string because it redirects a browser, not an XHR — and every failure
+  // path comes back here rather than rendering JSON at the API's address.
   useEffect(() => {
     const outcome = params.get('google_health');
     if (!outcome) return;
+
+    const reason = params.get('reason');
     params.delete('google_health');
     params.delete('reason');
     params.delete('scopes');
     setParams(params, { replace: true });
-    if (outcome === 'connected') sync();
-    else setError('Google access was not granted.');
+
+    if (outcome === 'connected') {
+      sync();
+      return;
+    }
+    setError(OUTCOME_MESSAGE[outcome]?.(reason) ?? `Google Health returned "${outcome}".`);
   }, [params, setParams, sync]);
 
   if (!status?.configured) return null;

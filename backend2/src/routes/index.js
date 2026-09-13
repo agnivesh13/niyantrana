@@ -12,7 +12,7 @@ import * as logController from '../controllers/logController.js';
 import * as wearableController from '../controllers/wearableController.js';
 import * as riskController from '../controllers/riskController.js';
 import * as userController from '../controllers/userController.js';
-import authenticate from '../middleware/authenticate.js';
+import authenticate, { authenticateOrRedirect } from '../middleware/authenticate.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 
 const router = Router();
@@ -30,8 +30,11 @@ router.post('/auth/google', asyncHandler(authController.google));
 // Google Health API consent. Separate from sign-in on purpose: these scopes are
 // Restricted, so until the app passes OAuth verification only accounts added as
 // test users in the Google Cloud console can complete this flow.
-router.get('/auth/google/health', authenticate, asyncHandler(wearableController.googleHealthStart));
-router.get('/auth/google/health/callback', authenticate,
+// authenticateOrRedirect, not authenticate: these two are browser navigations,
+// so an unauthenticated hit belongs on the sign-in screen, not in a JSON 401.
+router.get('/auth/google/health', authenticateOrRedirect,
+  asyncHandler(wearableController.googleHealthStart));
+router.get('/auth/google/health/callback', authenticateOrRedirect,
   asyncHandler(wearableController.googleHealthCallback));
 
 // --- Profile and wearable data ---

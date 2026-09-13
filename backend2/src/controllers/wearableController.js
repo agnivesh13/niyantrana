@@ -10,7 +10,7 @@
 import crypto from 'node:crypto';
 
 import config from '../config/env.js';
-import { UnauthorizedError, ValidationError } from '../domain/errors.js';
+import { ValidationError } from '../domain/errors.js';
 import demoDataService from '../services/demoDataService.js';
 import googleHealthService from '../services/googleHealthService.js';
 import userRepository from '../repositories/userRepository.js';
@@ -65,6 +65,19 @@ export function importFormats(_req, res) {
 
 // --- Google Health ----------------------------------------------------------
 
+/**
+ * Send the browser back to the app with the outcome in the query string.
+ *
+ * Defaults to the first configured CORS origin, which is the frontend by
+ * definition -- GOOGLE_HEALTH_RETURN_URL only has to be set when the app that
+ * starts the flow lives somewhere else.
+ */
+function backToApp(res, params) {
+  const returnTo = config.google.healthReturnUrl
+    || `${config.corsOrigins[0]}/onboarding`;
+  return res.redirect(`${returnTo}?${new URLSearchParams(params)}`);
+}
+
 export function googleHealthStatus(req, res) {
   return googleHealthService.status(req.user.id).then((status) => res.json(status));
 }
@@ -77,14 +90,23 @@ export function googleHealthStatus(req, res) {
  * authorization code and attach their health account to this user.
  */
 export async function googleHealthStart(req, res) {
+  // Every exit from here is a redirect, because a browser is navigating: an
+  // error rendered as JSON leaves the user on a blank page with no way back.
   if (!googleHealthService.configured) {
-    throw new ValidationError(
-      'Google Health is not configured on this server (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)',
-    );
+    return backToApp(res, { google_health: 'unconfigured' });
   }
+
   const state = crypto.randomBytes(32).toString('base64url');
   req.session.googleHealthState = state;
-  res.redirect(googleHealthService.authorizationUrl(state));
+
+  // Saved explicitly before redirecting. The session store is MongoDB, so the
+  // write is a round trip; redirecting first can race it, and a state that has
+  // not landed by the time Google sends the user back fails the check on return
+  // and looks exactly like a CSRF attempt.
+  return req.session.save((error) => {
+    if (error) return backToApp(res, { google_health: 'session_error' });
+    return res.redirect(googleHealthService.authorizationUrl(state));
+  });
 }
 
 /**
@@ -98,17 +120,29 @@ export async function googleHealthCallback(req, res) {
   const expected = req.session.googleHealthState;
   delete req.session.googleHealthState;
 
-  const returnTo = config.google.healthReturnUrl || `${config.corsOrigins[0]}/onboarding`;
-  const back = (params) => res.redirect(`${returnTo}?${new URLSearchParams(params)}`);
-
-  if (req.query.error) return back({ google_health: 'denied', reason: req.query.error });
-  if (!req.query.state || req.query.state !== expected) {
-    throw new UnauthorizedError('That Google callback did not match this session');
+  if (req.query.error) {
+    return backToApp(res, { google_health: 'denied', reason: req.query.error });
   }
-  if (!req.query.code) return back({ google_health: 'denied', reason: 'no_code' });
+  if (!req.query.state || req.query.state !== expected) {
+    // Refused either way -- the account is not connected. Reported as a
+    // redirect rather than a JSON 401 so the user lands back in the app, where
+    // "try again" is a button rather than a URL they have to retype.
+    return backToApp(res, { google_health: 'state_mismatch' });
+  }
+  if (!req.query.code) return backToApp(res, { google_health: 'denied', reason: 'no_code' });
 
-  const result = await googleHealthService.connect(req.user.id, req.query.code);
-  return back({ google_health: 'connected', scopes: result.scopes.length });
+  try {
+    const result = await googleHealthService.connect(req.user.id, req.query.code);
+    return backToApp(res, { google_health: 'connected', scopes: result.scopes.length });
+  } catch (error) {
+    // Google rejecting the code exchange is the common real failure here: a
+    // redirect URI that does not match byte for byte, or a missing client
+    // secret. Carry the reason back so it is readable in the app.
+    return backToApp(res, {
+      google_health: 'failed',
+      reason: String(error.message).slice(0, 200),
+    });
+  }
 }
 
 export async function googleHealthSync(req, res) {

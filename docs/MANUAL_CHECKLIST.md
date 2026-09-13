@@ -253,6 +253,57 @@ curl -s https://niyantrana-api.onrender.com/health
 `/health` reports both flags, so a missing credential is visible from a health
 check instead of from a user hitting the error in the browser.
 
+### ☐ 2b. Turning on Google Health — the four remaining switches
+
+Sign-in is live and verified (`google_sign_in: true`). Health needs four more
+things, and `/health` tells you when the first one lands:
+
+**1. `GOOGLE_CLIENT_SECRET` on Render.** Currently missing —
+`"google_health": false` in the health check. Sign-in only needs the client ID
+because it verifies an ID token; the Health connect flow exchanges an
+authorization code, which requires the secret. Set it, and the flag flips.
+
+**2. Enable the Google Health API** — APIs & Services → Library. Without it the
+`googlehealth.*` scopes do not exist to be granted.
+
+**3. Declare the three scopes** — Data access → Add or remove scopes. The list
+is currently empty, so a connect attempt cannot be granted anything:
+
+```
+https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
+https://www.googleapis.com/auth/googlehealth.sleep.readonly
+https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly
+```
+
+**4. Add the redirect URI and test users.** On the OAuth client, Authorised
+redirect URIs must contain **exactly**:
+
+```
+https://niyantrana-api.onrender.com/auth/google/health/callback
+```
+
+and under Audience → Test users, add your own Google account. Restricted scopes
+are refused for anyone who is not a test user until the security assessment
+passes, so this is the difference between the flow working for you and not.
+
+**Every failure now lands back in the app, not in raw JSON.** The consent entry
+point and its callback are browser navigations, so a 401 or a validation error
+used to render JSON at the API's address — a dead end with no way back. Each
+outcome now redirects to onboarding with a specific message:
+
+| Outcome | What it means |
+|---|---|
+| `unconfigured` | No client secret on the server (switch 1 above) |
+| `denied` | You declined, or Google refused the request |
+| `failed` | Google rejected the code exchange — usually a redirect URI that does not match byte for byte |
+| `state_mismatch` | Stale tab or an expired session mid-flow; connect again |
+| `signin_required` | Not signed in; the flow sends you to `/signin` |
+
+The OAuth state is also now written to the session store *before* the redirect.
+It is a MongoDB round trip, and redirecting first can race it — a state that has
+not landed by the time Google sends you back fails the check and looks exactly
+like a CSRF attempt.
+
 ### ☐ 3. Put some data in the account — ~5 minutes
 
 A brand-new Google account has no health data, so a sync will correctly return
