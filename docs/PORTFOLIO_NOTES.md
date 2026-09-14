@@ -8,11 +8,11 @@ The temptation with a health-ML project is to lead with the best number. Don't �
 
 ## The 60-second version
 
-> "I inherited a metabolic risk app that reported R² 0.97 on its ML model. I found the number was an artifact — the scalers were fit before the train/test split, and the split was random over sliding windows that overlapped by 13 of 14 days with the same 15 people on both sides. Re-split properly by user, the same model scored **worse than predicting the mean**.
+> "Niyantrana estimates metabolic risk — fatty liver, dysglycaemia, hypertension — from diet logs and wearable data. The first model reported R² 0.97, and on a problem this hard that is a reason to audit the split rather than publish it: scalers were fit before the train/test split, and the split was random over sliding windows overlapping by 13 of 14 days with the same 15 people on both sides. Re-split by participant, it scored **worse than predicting the mean**.
 >
-> Separately, the served model was feeding its entire tabular branch NaN, so every user got a bit-identical prediction regardless of age or BMI.
+> The serving path failed the same way — its whole tabular branch was fed NaN, so every user got a bit-identical prediction regardless of age or BMI, and nothing raised.
 >
-> I rebuilt it on 17,961 real NHANES adults. The honest numbers are AUROC around 0.80 for hypertension, dysglycaemia and diabetes — much lower than the fake 0.97, and actually defensible."
+> So it is trained on 17,961 real NHANES adults instead. The honest numbers are AUROC around 0.80 for hypertension, dysglycaemia and diabetes — far lower than 0.97, and actually defensible."
 
 That's the whole pitch. It demonstrates skepticism about your own metrics, which is rarer and more valuable than a high score.
 

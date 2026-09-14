@@ -37,7 +37,7 @@ ML_SERVICE_URL=http://127.0.0.1:8000 \
 npm test
 ```
 
-24 tests, ~1.4s.
+138 tests across six suites, ~7s.
 
 ## Endpoints
 

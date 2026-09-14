@@ -120,7 +120,7 @@ python -m src.data.nhanes.download          # ~25 MB from the CDC, no registrati
 python -m src.data.nhanes.build_dataset     # -> data/processed/nhanes_metabolic.csv
 python -m src.training.train_risk_engine    # -> models/risk_engine.joblib, reports/nhanes_metrics.json
 python -m src.training.train_classifiers    # -> models/risk_classifiers.joblib, reports/shap/
-python -m pytest tests/ -q                  # 48 passed
+python -m pytest tests/ -q                  # 104 passed, 1 skipped
 ```
 
 ---

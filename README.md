@@ -188,8 +188,8 @@ python -m pytest tests/ -q
 ### Tests
 
 ```bash
-cd ml       && python -m pytest tests/ -q     # 102
-cd backend2 && npm test                       # 83 (needs Mongo + inference running)
+cd ml       && python -m pytest tests/ -q     # 104 passed, 1 skipped
+cd backend2 && npm test                       # 138 (needs Mongo + inference running)
 ```
 
 ### Try the live API
